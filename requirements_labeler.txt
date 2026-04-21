@@ -1,0 +1,9 @@
+streamlit
+pillow
+matplotlib
+numpy
+librosa
+tqdm
+simpleaudio
+scikit-learn
+

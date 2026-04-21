@@ -1,0 +1,17 @@
+# Virtual environment
+.venv/
+
+# All data (audio, spectrograms, training images, manifests)
+Data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
