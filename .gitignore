@@ -1,8 +1,18 @@
 # Virtual environment
 .venv/
 
-# All data (audio, spectrograms, training images, manifests)
-Data/
+# Raw audio (never modify, never commit)
+raw/
+
+# Generated data
+processed/
+labeled/
+dataset/
+models/
+results/
+
+# Keep folder structure
+!**/.gitkeep
 
 # Python cache
 __pycache__/

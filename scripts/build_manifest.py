@@ -29,7 +29,7 @@ from typing import Iterable
 
 LABEL_DIRS = {
     "litoria_aurea": 1,
-    "background": 0,
+    "non_target": 0,
 }
 
 _START_RE = re.compile(r"^(?P<recording_id>.+)_start(?P<sec>\d+)s$", re.IGNORECASE)
@@ -90,7 +90,7 @@ def assign_splits(
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
-    default_training = repo_root / "Data" / "training_data"
+    default_training = repo_root / "labeled"
     default_out = default_training / "manifest.csv"
 
     p = argparse.ArgumentParser(description="Build manifest.csv from labeled training_data folders.")

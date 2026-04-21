@@ -60,12 +60,12 @@ class Paths:
 
 def _default_paths() -> Paths:
     repo_root = Path(__file__).resolve().parents[1]
-    spectrogram_root = repo_root / "Data" / "spectrograms"
-    raw_root = repo_root / "Data" / "raw"
-    processed_root = repo_root / "Data" / "processed"
-    training_root = repo_root / "Data" / "training_data"
+    spectrogram_root = repo_root / "processed" / "external" / "spectrograms"
+    raw_root = repo_root / "raw" / "external"
+    processed_root = repo_root / "processed" / "external" / "chunks"
+    training_root = repo_root / "labeled"
     frog_dir = training_root / "litoria_aurea"
-    bg_dir = training_root / "background"
+    bg_dir = training_root / "non_target"
     return Paths(
         repo_root=repo_root,
         spectrogram_root=spectrogram_root,
@@ -512,7 +512,7 @@ def main() -> int:
         processed_root=args.processed_root,
         training_root=args.training_root,
         frog_dir=args.training_root / "litoria_aurea",
-        bg_dir=args.training_root / "background",
+        bg_dir=args.training_root / "non_target",
     )
 
     if not paths.spectrogram_root.exists():
@@ -618,7 +618,7 @@ def main() -> int:
             continue
         if key == "n":
             try:
-                dest = move_to_label(paths, img_path, "background")
+                dest = move_to_label(paths, img_path, "non_target")
                 print(f"Moved -> {dest}")
             except Exception as e:
                 print(f"[ERROR] Failed to move file (background label): {img_path} ({e})", flush=True)

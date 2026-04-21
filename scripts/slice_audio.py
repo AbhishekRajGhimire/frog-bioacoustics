@@ -47,8 +47,8 @@ class Config:
     sample_rate: int = 22050
     chunk_seconds: int = 5
     n_mels: int = 128
-    fmin: int = 0
-    fmax: int = 8000
+    fmin: int = 400
+    fmax: int = 4000
     # Frequency range considered for the Mel-spectrogram.
     #
     # Note: For Litoria aurea (Green and Golden Bell Frog), you may get cleaner
@@ -169,11 +169,8 @@ def _resolve_path(repo_root: Path, p: Path) -> Path:
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
 
-    # Defaults match this repo’s layout:
-    # - Data/raw/
-    # - Data/spectrograms/
-    default_raw = repo_root / "Data" / "raw"
-    default_out = repo_root / "Data" / "spectrograms"
+    default_raw = repo_root / "raw" / "external"
+    default_out = repo_root / "processed" / "external" / "spectrograms"
 
     p = argparse.ArgumentParser(
         description="Slice raw audio into fixed chunks and save Mel-spectrogram PNGs while preserving folder structure."

@@ -117,26 +117,21 @@ def _candidate_dirs(repo_root: Path) -> dict[str, list[str]]:
         "training_root": [],
     }
 
-    data_dir = repo_root / "Data"
-    if not data_dir.exists():
-        return out
-
-    # Common defaults and likely alternates
     candidates = {
         "spectrogram_root": [
-            data_dir / "spectrograms",
-            data_dir / "spectrograms" / "good_data",
+            repo_root / "processed" / "external" / "spectrograms",
+            repo_root / "processed" / "ponds" / "spectrograms",
         ],
         "raw_root": [
-            data_dir / "raw",
-            data_dir / "good data",
+            repo_root / "raw" / "external",
+            repo_root / "raw" / "ponds",
         ],
         "processed_root": [
-            data_dir / "processed",
-            data_dir / "processed" / "good_data",
+            repo_root / "processed" / "external" / "chunks",
+            repo_root / "processed" / "ponds" / "chunks",
         ],
         "training_root": [
-            data_dir / "training_data",
+            repo_root / "labeled",
         ],
     }
 
@@ -150,7 +145,7 @@ def _candidate_dirs(repo_root: Path) -> dict[str, list[str]]:
                     seen.add(s)
 
     # Add immediate subfolders for spectrograms/processed (helps choose dataset-scoped subdirs).
-    for base_key, base_path in [("spectrogram_root", data_dir / "spectrograms"), ("processed_root", data_dir / "processed")]:
+    for base_key, base_path in [("spectrogram_root", repo_root / "processed"), ("processed_root", repo_root / "processed")]:
         if base_path.exists():
             try:
                 for child in base_path.iterdir():
@@ -217,10 +212,10 @@ def main() -> None:
     repo_root = _repo_root()
 
     # Defaults
-    default_spectrogram_root = repo_root / "Data" / "spectrograms" / "good_data"
-    default_raw_root = repo_root / "Data" / "good data"
-    default_processed_root = repo_root / "Data" / "processed" / "good_data"
-    default_training_root = repo_root / "Data" / "training_data"
+    default_spectrogram_root = repo_root / "processed" / "external" / "spectrograms"
+    default_raw_root = repo_root / "raw" / "external"
+    default_processed_root = repo_root / "processed" / "external" / "chunks"
+    default_training_root = repo_root / "labeled"
     browse = _candidate_dirs(repo_root)
 
     with st.sidebar:
@@ -283,7 +278,7 @@ def main() -> None:
             training_root_str = st.text_input(
                 "training_root",
                 str(default_training_root),
-                help="Where labeled images are moved to (litoria_aurea / background).",
+                help="Where labeled images are moved to (litoria_aurea / non_target).",
             )
             if browse["training_root"]:
                 training_pick = st.selectbox(
@@ -369,7 +364,7 @@ def main() -> None:
 
     # Simple labeling stats
     frog_count = _count_pngs(training_root / "litoria_aurea")
-    bg_count = _count_pngs(training_root / "background")
+    bg_count = _count_pngs(training_root / "non_target")
     remaining = len(images) - idx
 
     if not images:
@@ -390,7 +385,7 @@ def main() -> None:
         processed_root=processed_root,
         training_root=training_root,
         frog_dir=training_root / "litoria_aurea",
-        bg_dir=training_root / "background",
+        bg_dir=training_root / "non_target",
     )
     paths.frog_dir.mkdir(parents=True, exist_ok=True)
     paths.bg_dir.mkdir(parents=True, exist_ok=True)
@@ -481,7 +476,7 @@ def main() -> None:
             st.rerun()
 
         if st.button("Background (no target frog)", use_container_width=True):
-            _label_and_track(paths, img_path, "background")
+            _label_and_track(paths, img_path, "non_target")
             st.session_state["idx"] += 1
             st.session_state["audio_replay"] += 1
             st.rerun()

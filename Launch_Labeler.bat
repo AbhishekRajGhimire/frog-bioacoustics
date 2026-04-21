@@ -60,7 +60,7 @@ echo Close this window to stop the app.
 echo.
 
 REM Streamlit opens your browser automatically.
-"%PYEXE%" -m streamlit run "src\label_frontend.py" --server.address localhost --server.port 8501
+"%PYEXE%" -m streamlit run "scripts\label_frontend.py" --server.address localhost --server.port 8501
 
 echo.
 echo [DONE] Streamlit stopped.

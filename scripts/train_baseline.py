@@ -61,7 +61,7 @@ def eval_split(name: str, y_true: np.ndarray, y_pred: np.ndarray) -> None:
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
-    default_manifest = repo_root / "Data" / "training_data" / "manifest.csv"
+    default_manifest = repo_root / "labeled" / "manifest.csv"
 
     p = argparse.ArgumentParser(description="Train a simple baseline on spectrogram PNGs.")
     p.add_argument("--manifest", type=Path, default=default_manifest)
