@@ -334,7 +334,7 @@ uv lock
 uv sync --frozen
 uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file requirements_labeler.txt
 uv run python -m unittest tests.data.test_config -v
-uv run python -m pip check
+uv pip check
 ```
 
 Expected: all configuration tests pass and pip reports no broken requirements.
@@ -957,7 +957,7 @@ Run:
 ```powershell
 uv lock --check
 uv sync --frozen
-uv run python -m pip check
+uv pip check
 uv run python -m unittest discover -s tests -v
 uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/label_spectrograms.py scripts/slice_audio.py scripts/train_baseline.py
 git diff --check
