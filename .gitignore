@@ -1,6 +1,9 @@
 # Virtual environment
 .venv/
 
+# Isolated development worktrees
+.worktrees/
+
 # Data and generated artifacts
 raw/**
 processed/**
