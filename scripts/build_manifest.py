@@ -7,6 +7,7 @@ from typing import Sequence
 
 from frog_classifier.data import (
     ConfigError,
+    ManifestIssue,
     ManifestValidationError,
     build_data_quality_report,
     build_manifest_rows,
@@ -55,8 +56,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     out_csv = _resolve(repo_root, args.out_csv)
     report_dir = _resolve(repo_root, args.report_dir)
     config_path = _resolve(repo_root, args.config)
+    report_json = (report_dir / "manifest-report.json").resolve()
+    report_markdown = (report_dir / "manifest-report.md").resolve()
 
     try:
+        _validate_output_paths((out_csv, report_json, report_markdown))
         config = load_preprocessing_config(config_path)
         examples = discover_labeled_examples(training_root, repo_root, config)
         plan = create_split_plan(
@@ -81,8 +85,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             manifest_payload,
             repo_root,
         )
-        report_json = report_dir / "manifest-report.json"
-        report_markdown = report_dir / "manifest-report.md"
         write_output_bundle({
             out_csv: manifest_payload,
             report_json: serialize_report_json(report),
@@ -113,6 +115,22 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _resolve(repo_root: Path, path: Path) -> Path:
     return path.resolve() if path.is_absolute() else (repo_root / path).resolve()
+
+
+def _validate_output_paths(paths: Sequence[Path]) -> None:
+    collisions = sorted(
+        {path for path in paths if paths.count(path) > 1},
+        key=str,
+    )
+    if collisions:
+        raise ManifestValidationError(
+            ManifestIssue(
+                "output_path_collision",
+                "manifest CSV and report destinations must be pairwise distinct",
+                str(path),
+            )
+            for path in collisions
+        )
 
 
 if __name__ == "__main__":

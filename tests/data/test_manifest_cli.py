@@ -110,7 +110,45 @@ class BuildManifestCommandTests(unittest.TestCase):
             expected_payloads,
         )
 
-    def _run(self) -> subprocess.CompletedProcess[str]:
+    def test_rejects_csv_collisions_with_each_report_without_replacing_outputs(
+        self,
+    ) -> None:
+        for fold_group in range(5):
+            for label_name in ("litoria_aurea", "non_target"):
+                recording_id = f"{label_name}_{fold_group}"
+                write_png(
+                    self.training_root,
+                    f"{label_name}/{recording_id}_start0s.png",
+                )
+        report_json = self.report_dir / "manifest-report.json"
+        report_markdown = self.report_dir / "manifest-report.md"
+        expected_payloads = {
+            self.csv_path: b"existing csv",
+            report_json: b"existing json",
+            report_markdown: b"existing markdown",
+        }
+
+        for collision_path in (report_json, report_markdown):
+            with self.subTest(collision_path=collision_path):
+                for path, payload in expected_payloads.items():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(payload)
+
+                completed = self._run(out_csv=collision_path)
+
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn("output_path_collision", completed.stderr)
+                self.assertIn(str(collision_path), completed.stderr)
+                self.assertEqual(
+                    {path: path.read_bytes() for path in expected_payloads},
+                    expected_payloads,
+                )
+
+    def _run(
+        self,
+        *,
+        out_csv: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             (
                 sys.executable,
@@ -118,7 +156,7 @@ class BuildManifestCommandTests(unittest.TestCase):
                 "--training-root",
                 str(self.training_root),
                 "--out-csv",
-                str(self.csv_path),
+                str(out_csv or self.csv_path),
                 "--report-dir",
                 str(self.report_dir),
                 "--config",
