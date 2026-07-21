@@ -1,0 +1,106 @@
+# Frog Classifier Workflow
+
+This is the operational guide for preprocessing recordings, applying human labels, and producing a validated manifest.
+Read the [README](../README.md) for the project entry point and the [architecture](architecture.md) for implementation boundaries.
+
+## Environment setup
+
+Python 3.13 is the supported runtime.
+Install [uv](https://docs.astral.sh/uv/) and create the locked environment:
+
+```powershell
+uv sync --frozen
+```
+
+To open the graphical labeler on Windows without using uv directly, double-click `Launch_Labeler.bat`.
+The launcher creates `.venv`, installs the generated locked compatibility export, and opens the Streamlit interface.
+`requirements_labeler.txt` is generated from `uv.lock` and must not be edited manually.
+After intentionally changing direct dependency constraints, refresh the lock and compatibility export:
+
+```powershell
+uv lock
+uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file requirements_labeler.txt
+```
+
+## Generate spectrograms
+
+`scripts/slice_audio.py` recursively discovers `.wav` and `.mp3` recordings, preserves their relative folder structure, and writes one axis-free PNG for every complete five-second window.
+The configured contract uses 22,050 Hz mono audio, no overlap, 128 Mel bins, a 0 Hz to 8,000 Hz range, and drops the final partial window.
+The machine-readable configuration is [config/preprocessing.toml](../config/preprocessing.toml).
+
+Process the default external recording root:
+
+```powershell
+uv run python scripts/slice_audio.py
+```
+
+Run a small external-data smoke sample:
+
+```powershell
+uv run python scripts/slice_audio.py --limit-files 2
+```
+
+Process pond recordings into their separate tree:
+
+```powershell
+uv run python scripts/slice_audio.py --raw-root raw/ponds --out-root processed/ponds/spectrograms
+```
+
+Each filename records the original recording stem and chunk start time.
+For example, `recording01_start30s.png` represents the five-second window beginning at 30 seconds in `recording01.wav`.
+
+## Apply labels
+
+The recommended interface is `scripts/label_frontend.py`, launched through `Launch_Labeler.bat`.
+It displays a spectrogram, locates or exports the matching five-second WAV chunk, and moves the PNG into one canonical label directory.
+The terminal and Matplotlib alternative is:
+
+```powershell
+uv run python scripts/label_spectrograms.py --limit 12 --shuffle
+```
+
+Use `--limit 0` only when intentionally starting an unrestricted session.
+The labeler defaults to the external spectrogram, raw-audio, and cached-chunk trees.
+Pass the corresponding pond paths together when labeling pond data so audio lookup remains deterministic.
+
+### Labeling policy
+
+Use Frog only when the target call is confidently present, even if it is faint.
+Use Background only when the clip is confidently non-target.
+Use Skip when identification is uncertain, and do not convert uncertainty into a negative label.
+Phase 3 will add an explicit review-later state and signal-quality metadata.
+
+Frog is stored as `labeled/litoria_aurea` with numeric label `1`.
+Background is stored as `labeled/non_target` with numeric label `0`.
+
+## Build the validated manifest
+
+`scripts/build_manifest.py` discovers the canonical label directories, parses each example name, validates duplicates and paths, and creates class-aware grouped folds.
+All examples from one recording ID receive one fold and one split.
+The command writes the versioned CSV to `labeled/manifest.csv` and JSON and Markdown data-quality reports to `results/data_quality/`.
+
+```powershell
+uv run python scripts/build_manifest.py
+```
+
+The manifest includes its version, a stable example identifier, image and class metadata, recording identity, start time, fold, split, and preprocessing configuration SHA-256.
+The default plan uses five folds with test fold zero and validation fold one.
+Override the fold plan only when the resulting folds preserve both classes and recording isolation:
+
+```powershell
+uv run python scripts/build_manifest.py --folds 5 --test-fold 0 --val-fold 1 --seed 1337
+```
+
+The command fails instead of writing partial output when the source labels, filename contract, class coverage, fold plan, or output destinations are invalid.
+
+## Run the strict baseline
+
+The baseline loads and revalidates the generated manifest with the same preprocessing configuration.
+It trains a balanced logistic-regression classifier on resized grayscale spectrograms and prints train, validation, and test metrics.
+
+```powershell
+uv run python scripts/train_baseline.py
+```
+
+The baseline is a pipeline and evaluation sanity check.
+It does not save a model or perform recording inference.

@@ -18,14 +18,9 @@ PLACEHOLDERS = (
     "processed/ponds/spectrograms/.gitkeep",
     "labeled/litoria_aurea/.gitkeep",
     "labeled/non_target/.gitkeep",
-    "dataset/train/litoria_aurea/.gitkeep",
-    "dataset/train/non_target/.gitkeep",
-    "dataset/val/litoria_aurea/.gitkeep",
-    "dataset/val/non_target/.gitkeep",
-    "dataset/test/litoria_aurea/.gitkeep",
-    "dataset/test/non_target/.gitkeep",
     "models/.gitkeep",
     "results/analytics/.gitkeep",
+    "results/data_quality/.gitkeep",
 )
 
 GENERATED_PATHS = (
@@ -33,9 +28,37 @@ GENERATED_PATHS = (
     "processed/external/chunks/example.wav",
     "processed/external/spectrograms/example.png",
     "labeled/litoria_aurea/example.png",
-    "dataset/train/litoria_aurea/example.png",
     "models/example.pkl",
     "results/analytics/example.csv",
+    "results/data_quality/example.json",
+)
+
+DATA_PACKAGE_MODULES = (
+    "src/frog_classifier/data/__init__.py",
+    "src/frog_classifier/data/config.py",
+    "src/frog_classifier/data/manifest.py",
+    "src/frog_classifier/data/naming.py",
+    "src/frog_classifier/data/reporting.py",
+    "src/frog_classifier/data/splitting.py",
+    "src/frog_classifier/data/validation.py",
+)
+
+OPERATIONAL_DOCUMENTS = (
+    "README.md",
+    "roadmap.md",
+    "docs/architecture.md",
+    "docs/workflow.md",
+)
+
+OBSOLETE_PATHS = (
+    "PROCESS.md",
+    "docs/system design.md",
+    "dataset/train/litoria_aurea/.gitkeep",
+    "dataset/train/non_target/.gitkeep",
+    "dataset/val/litoria_aurea/.gitkeep",
+    "dataset/val/non_target/.gitkeep",
+    "dataset/test/litoria_aurea/.gitkeep",
+    "dataset/test/non_target/.gitkeep",
 )
 
 RUNTIME_DEPENDENCIES = {
@@ -61,15 +84,18 @@ EXPECTED_RUNTIME_REQUIREMENTS = {
 }
 
 OPERATIONAL_TEXT_FILES = (
-    "PROCESS.md",
-    "docs/system design.md",
+    "README.md",
+    "docs/architecture.md",
+    "docs/workflow.md",
     "scripts/build_manifest.py",
     "scripts/label_spectrograms.py",
     "scripts/slice_audio.py",
     "scripts/train_baseline.py",
 )
 
-STALE_LAYOUT_TOKENS = ("Data/", "Data\\", "src/", "src\\")
+STALE_LAYOUT_TOKENS = ("Data/", "Data\\")
+
+MARKDOWN_LINK_PATTERN = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 
 
 def git_path_is_ignored(relative_path: str) -> bool:
@@ -94,8 +120,24 @@ class RepositoryLayoutTests(unittest.TestCase):
                 self.assertTrue((REPO_ROOT / relative_path).is_file())
                 self.assertFalse(git_path_is_ignored(relative_path))
 
-        for split in ("train", "val", "test"):
-            self.assertFalse((REPO_ROOT / "dataset" / split / "bell_frog" / ".gitkeep").exists())
+        for relative_path in OBSOLETE_PATHS:
+            with self.subTest(obsolete=relative_path):
+                self.assertFalse((REPO_ROOT / relative_path).exists())
+
+    def test_project_navigation_files_are_complete_and_linked(self) -> None:
+        for relative_path in (*OPERATIONAL_DOCUMENTS, "config/preprocessing.toml", *DATA_PACKAGE_MODULES):
+            with self.subTest(required=relative_path):
+                self.assertTrue((REPO_ROOT / relative_path).is_file())
+
+        for relative_path in OPERATIONAL_DOCUMENTS:
+            document_path = REPO_ROOT / relative_path
+            document = document_path.read_text(encoding="utf-8")
+            for target in MARKDOWN_LINK_PATTERN.findall(document):
+                target_path = target.split("#", maxsplit=1)[0]
+                if not target_path or "://" in target_path or target_path.startswith("mailto:"):
+                    continue
+                with self.subTest(document=relative_path, target=target):
+                    self.assertTrue((document_path.parent / target_path).exists())
 
     def test_text_and_binary_git_attributes_are_explicit(self) -> None:
         attributes_path = REPO_ROOT / ".gitattributes"
