@@ -246,7 +246,7 @@ wheels = [
 [[package]]
 name = "frog-classifier"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "librosa" },
     { name = "matplotlib" },

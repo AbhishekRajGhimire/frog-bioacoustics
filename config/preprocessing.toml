@@ -1,0 +1,29 @@
+schema_version = 1
+
+[audio]
+sample_rate_hz = 22050
+mono = true
+chunk_seconds = 5
+overlap_seconds = 0
+drop_incomplete_final_chunk = true
+
+[spectrogram]
+kind = "mel"
+n_mels = 128
+fmin_hz = 0
+fmax_hz = 8000
+power = 2.0
+n_fft = 2048
+hop_length = 512
+
+[rendering]
+format = "png"
+figure_width_inches = 3.2
+figure_height_inches = 3.2
+dpi = 150
+axis_visible = false
+interpolation = "nearest"
+
+[classes]
+litoria_aurea = 1
+non_target = 0

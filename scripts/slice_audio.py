@@ -26,6 +26,7 @@ from typing import Iterable
 
 import librosa
 import matplotlib
+from frog_classifier.data import load_preprocessing_config
 
 # Use a non-interactive backend so this can run on servers/CI without a display.
 matplotlib.use("Agg")
@@ -49,6 +50,13 @@ class Config:
     n_mels: int = 128
     fmin: int = 400
     fmax: int = 4000
+    power: float = 2.0
+    n_fft: int = 2048
+    hop_length: int = 512
+    figure_width_inches: float = 3.2
+    figure_height_inches: float = 3.2
+    dpi: int = 150
+    interpolation: str = "nearest"
     # Frequency range considered for the Mel-spectrogram.
     #
     # Note: For Litoria aurea (Green and Golden Bell Frog), you may get cleaner
@@ -91,6 +99,13 @@ def save_mel_png(
     n_mels: int,
     fmin: int,
     fmax: int,
+    power: float,
+    n_fft: int,
+    hop_length: int,
+    figure_width_inches: float,
+    figure_height_inches: float,
+    dpi: int,
+    interpolation: str,
 ) -> None:
     """
     Convert a waveform chunk into a Mel-spectrogram PNG.
@@ -106,16 +121,18 @@ def save_mel_png(
         n_mels=n_mels,
         fmin=fmin,
         fmax=fmax,
-        power=2.0,
+        power=power,
+        n_fft=n_fft,
+        hop_length=hop_length,
     )
     S_db = librosa.power_to_db(S, ref=np.max)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Minimal, axis-free image for ML pipelines.
-    fig = plt.figure(figsize=(3.2, 3.2), dpi=150)
+    fig = plt.figure(figsize=(figure_width_inches, figure_height_inches), dpi=dpi)
     ax = fig.add_subplot(111)
-    ax.imshow(S_db, origin="lower", aspect="auto", interpolation="nearest")
+    ax.imshow(S_db, origin="lower", aspect="auto", interpolation=interpolation)
     ax.axis("off")
     fig.savefig(out_path, bbox_inches="tight", pad_inches=0)
     plt.close(fig)
@@ -155,6 +172,13 @@ def process_file(cfg: Config, audio_path: Path) -> int:
             n_mels=cfg.n_mels,
             fmin=cfg.fmin,
             fmax=cfg.fmax,
+            power=cfg.power,
+            n_fft=cfg.n_fft,
+            hop_length=cfg.hop_length,
+            figure_width_inches=cfg.figure_width_inches,
+            figure_height_inches=cfg.figure_height_inches,
+            dpi=cfg.dpi,
+            interpolation=cfg.interpolation,
         )
         written += 1
 
@@ -168,6 +192,7 @@ def _resolve_path(repo_root: Path, p: Path) -> Path:
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
+    preprocessing = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
 
     default_raw = repo_root / "raw" / "external"
     default_out = repo_root / "processed" / "external" / "spectrograms"
@@ -193,11 +218,36 @@ def main() -> int:
         default="",
         help='Optional subfolder under out-root (e.g. "review_batch" -> processed/external/spectrograms/review_batch).',
     )
-    p.add_argument("--sample-rate", type=int, default=22050, help="Resample audio to this rate (Hz).")
-    p.add_argument("--chunk-seconds", type=int, default=5, help="Chunk length in seconds.")
-    p.add_argument("--n-mels", type=int, default=128, help="Number of Mel bins.")
-    p.add_argument("--fmin", type=int, default=0, help="Minimum frequency (Hz) for Mel-spectrogram.")
-    p.add_argument("--fmax", type=int, default=8000, help="Maximum frequency (Hz) for Mel-spectrogram.")
+    p.add_argument(
+        "--sample-rate",
+        type=int,
+        default=preprocessing.audio.sample_rate_hz,
+        help="Resample audio to this rate (Hz).",
+    )
+    p.add_argument(
+        "--chunk-seconds",
+        type=int,
+        default=preprocessing.audio.chunk_seconds,
+        help="Chunk length in seconds.",
+    )
+    p.add_argument(
+        "--n-mels",
+        type=int,
+        default=preprocessing.spectrogram.n_mels,
+        help="Number of Mel bins.",
+    )
+    p.add_argument(
+        "--fmin",
+        type=int,
+        default=preprocessing.spectrogram.fmin_hz,
+        help="Minimum frequency (Hz) for Mel-spectrogram.",
+    )
+    p.add_argument(
+        "--fmax",
+        type=int,
+        default=preprocessing.spectrogram.fmax_hz,
+        help="Maximum frequency (Hz) for Mel-spectrogram.",
+    )
     p.add_argument(
         "--limit-files",
         type=int,
@@ -214,6 +264,13 @@ def main() -> int:
         n_mels=int(args.n_mels),
         fmin=int(args.fmin),
         fmax=int(args.fmax),
+        power=preprocessing.spectrogram.power,
+        n_fft=preprocessing.spectrogram.n_fft,
+        hop_length=preprocessing.spectrogram.hop_length,
+        figure_width_inches=preprocessing.rendering.figure_width_inches,
+        figure_height_inches=preprocessing.rendering.figure_height_inches,
+        dpi=preprocessing.rendering.dpi,
+        interpolation=preprocessing.rendering.interpolation,
     )
 
     if not cfg.raw_root.exists():
