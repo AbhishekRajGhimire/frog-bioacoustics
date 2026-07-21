@@ -3,10 +3,14 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Sequence
 
 from .config import PreprocessingConfig
 from .naming import ExampleNameError, ExampleKey, parse_example_filename
 from .validation import ManifestIssue, ManifestValidationError
+
+if TYPE_CHECKING:
+    from .splitting import SplitPlan
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,29 @@ class ManifestRow:
     fold: int
     split: str
     preprocessing_config_sha256: str
+
+
+def build_manifest_rows(
+    examples: Sequence[LabeledExample],
+    plan: SplitPlan,
+    config_sha256: str,
+) -> tuple[ManifestRow, ...]:
+    digest = config_sha256.lower()
+    return tuple(
+        ManifestRow(
+            manifest_version=1,
+            example_id=example.example_id,
+            image_path=example.image_path,
+            label=example.label,
+            label_name=example.label_name,
+            recording_id=example.recording_id,
+            start_s=example.start_s,
+            fold=plan.fold_by_recording[example.recording_id],
+            split=plan.split_by_recording[example.recording_id],
+            preprocessing_config_sha256=digest,
+        )
+        for example in examples
+    )
 
 
 def discover_labeled_examples(
