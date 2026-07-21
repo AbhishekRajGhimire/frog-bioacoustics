@@ -4,7 +4,7 @@ from __future__ import annotations
 Baseline training on labeled spectrogram PNGs.
 
 This is intentionally simple and dependency-light:
-  - loads Data/training_data/manifest.csv (from build_manifest.py)
+  - loads labeled/manifest.csv (from build_manifest.py)
   - converts PNGs -> small grayscale arrays
   - trains a Logistic Regression classifier (scikit-learn)
   - reports metrics on val/test splits (if available)

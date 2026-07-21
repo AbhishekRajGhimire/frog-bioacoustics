@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 REM Frog Spectrogram Labeler launcher (Windows)
 REM - Double-click to run
 REM - Creates .venv on first run
-REM - Installs requirements_labeler.txt
+REM - Installs locked dependencies from requirements_labeler.txt
 REM - Launches Streamlit UI
 
 cd /d "%~dp0"
@@ -18,17 +18,17 @@ echo.
 set VENV_DIR=.venv
 set PYEXE=%VENV_DIR%\Scripts\python.exe
 
-REM Pick a system Python if venv doesn't exist yet
+REM Pick Python 3.13 if the venv does not exist yet.
 set SYS_PY=
-where py >nul 2>nul && set SYS_PY=py -3
+where py >nul 2>nul && py -3.13 -c "import sys; raise SystemExit(sys.version_info[:2] != (3, 13))" >nul 2>nul && set SYS_PY=py -3.13
 if "%SYS_PY%"=="" (
-  where python >nul 2>nul && set SYS_PY=python
+  where python >nul 2>nul && python -c "import sys; raise SystemExit(sys.version_info[:2] != (3, 13))" >nul 2>nul && set SYS_PY=python
 )
 
 if not exist "%PYEXE%" (
   echo [SETUP] Creating virtual environment in "%VENV_DIR%"...
   if "%SYS_PY%"=="" (
-    echo [ERROR] Python not found. Please install Python 3.10+ from python.org and try again.
+    echo [ERROR] Python 3.13 was not found. Please install Python 3.13 from python.org and try again.
     echo.
     pause
     exit /b 1
@@ -42,7 +42,16 @@ if not exist "%PYEXE%" (
   )
 )
 
-echo [SETUP] Installing/updating dependencies...
+"%PYEXE%" -c "import sys; raise SystemExit(sys.version_info[:2] != (3, 13))" >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] The existing .venv does not use Python 3.13.
+  echo Remove .venv, then run this launcher again to recreate it.
+  echo.
+  pause
+  exit /b 1
+)
+
+echo [SETUP] Installing locked dependencies...
 "%PYEXE%" -m pip install --upgrade pip >nul
 "%PYEXE%" -m pip install -r requirements_labeler.txt
 if errorlevel 1 (

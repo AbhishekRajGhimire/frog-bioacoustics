@@ -5,9 +5,9 @@ from __future__ import annotations
 slice_audio.py
 
 Goal:
-  Traverse a nested audio dataset under `Data/raw/`, slice audio into fixed 5-second
+  Traverse a nested audio dataset under `raw/external/`, slice audio into fixed 5-second
   chunks, convert each chunk into a Mel-spectrogram, and save the result as PNGs
-  under `Data/spectrograms/` while preserving the folder structure.
+  under `processed/external/spectrograms/` while preserving the folder structure.
 
 Key behaviors:
   - Discovery uses `os.walk`.
@@ -76,8 +76,8 @@ def pond_name_for_path(raw_root: Path, audio_path: Path) -> str:
     "Pond" = top-level folder under raw_root.
 
     Example:
-      raw_root=Data/raw
-      audio_path=Data/raw/1A/December Check/Data/foo.wav  -> pond "1A"
+      raw_root=raw/ponds
+      audio_path=raw/ponds/1A/December Check/audio/foo.wav  -> pond "1A"
     """
     rel = audio_path.relative_to(raw_root)
     return rel.parts[0] if len(rel.parts) > 0 else "raw"
@@ -135,7 +135,7 @@ def process_file(cfg: Config, audio_path: Path) -> int:
 
     # Preserve the subfolder structure from raw/ into spectrograms/.
     # Example:
-    #   Data/raw/1A/x/y.wav -> Data/spectrograms/1A/x/y_start0s.png
+    #   raw/ponds/1A/x/y.wav -> processed/ponds/spectrograms/1A/x/y_start0s.png
     rel = audio_path.relative_to(cfg.raw_root)
     out_dir = cfg.out_root / rel.parent
 
@@ -179,19 +179,19 @@ def main() -> int:
         "--raw-root",
         type=Path,
         default=default_raw,
-        help='Input root containing nested audio files (default: "Data/raw"). Example: --raw-root "Data/good data"',
+        help='Input root containing nested audio files (default: "raw/external"). Example: --raw-root "raw/ponds"',
     )
     p.add_argument(
         "--out-root",
         type=Path,
         default=default_out,
-        help='Output root for spectrogram PNGs (default: "Data/spectrograms").',
+        help='Output root for spectrogram PNGs (default: "processed/external/spectrograms").',
     )
     p.add_argument(
         "--out-subdir",
         type=str,
         default="",
-        help='Optional subfolder under out-root (e.g. "good_data" -> Data/spectrograms/good_data).',
+        help='Optional subfolder under out-root (e.g. "review_batch" -> processed/external/spectrograms/review_batch).',
     )
     p.add_argument("--sample-rate", type=int, default=22050, help="Resample audio to this rate (Hz).")
     p.add_argument("--chunk-seconds", type=int, default=5, help="Chunk length in seconds.")
@@ -248,5 +248,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
- 
- 

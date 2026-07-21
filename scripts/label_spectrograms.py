@@ -4,14 +4,14 @@ from __future__ import annotations
 Manual spectrogram labeling tool (demo-friendly).
 
 Workflow:
-  - Source images:      Data/spectrograms/**/*.png
-  - Target folders:     Data/training_data/litoria_aurea
-                        Data/training_data/background
+  - Source images:      processed/external/spectrograms/**/*.png
+  - Target folders:     labeled/litoria_aurea
+                        labeled/non_target
   - For each image:
       - display spectrogram
       - play the matching 5s audio chunk
-        - first try Data/processed/ (if you already have chunked audio files)
-        - otherwise auto-export the chunk from Data/raw/ into Data/processed/ and play it
+        - first try processed/external/chunks/ for a cached audio file
+        - otherwise auto-export the chunk from raw/external/ and play it
       - wait for keypress:
           y = label as Litoria aurea (move image)
           n = label as background (move image)
@@ -22,7 +22,7 @@ Filename convention expected (from our slicer):
   <original_stem>_start{N}s.png
 
 Audio lookup convention expected:
-  Data/processed/<same subfolders>/<original_stem>_start{N}s.(wav|mp3)
+  processed/external/chunks/<same subfolders>/<original_stem>_start{N}s.(wav|mp3)
 """
 
 import argparse
@@ -102,8 +102,8 @@ def parse_chunk_from_png_name(png_path: Path) -> tuple[str, int] | None:
 
 def find_processed_chunk_audio(paths: Paths, png_path: Path) -> Optional[Path]:
     """
-    Find the corresponding 5s audio chunk in Data/processed/ based on:
-      - relative folder path under Data/spectrograms/
+    Find the corresponding 5s audio chunk in processed_root based on:
+      - relative folder path under spectrogram_root
       - png filename stem (expects *_start{N}s)
     """
     try:
@@ -191,7 +191,7 @@ def export_processed_chunk_from_raw(
     """
     Create the processed 5-second audio chunk from the corresponding raw audio file.
 
-    Output path: Data/processed/<same subfolders>/<png_stem>.wav
+    Output path: processed_root/<same subfolders>/<png_stem>.wav
     """
     parsed = parse_chunk_from_png_name(png_path)
     if parsed is None:
@@ -501,7 +501,7 @@ def main() -> int:
     p.add_argument(
         "--no-auto-export-missing-audio",
         action="store_true",
-        help="Disable exporting missing chunks from Data/raw into Data/processed (labeling will run without audio).",
+        help="Disable exporting missing chunks from raw_root into processed_root (labeling will run without audio).",
     )
     args = p.parse_args()
 
@@ -638,4 +638,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

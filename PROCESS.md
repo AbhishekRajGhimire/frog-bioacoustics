@@ -1,220 +1,180 @@
-# Frog Classifier — Process Log
+# Frog Classifier Process Log
 
-This file is a running log of **what we’ve built so far**, **how to reproduce it**, and **what decisions we’ve made**. Append to this over time as the project evolves.
+This document records what the project currently does, how to reproduce it, and the operational decisions that must remain stable.
+The root [roadmap](roadmap.md) tracks future work and completion criteria.
 
-## Current repository layout (relevant parts)
+## Current checkpoint
 
-- `Data/raw/`: source audio dataset (nested folders; “pond” is typically the first folder under `raw/`, e.g. `1A`, `1B`).
-- `Data/spectrograms/`: generated outputs (mirrors the directory structure from `Data/raw/`).
-- `src/slice_audio.py`: audio traversal + slicing + Mel-spectrogram PNG generation script.
+The current local dataset contains 618 five-minute recordings.
+All recordings have been converted into 37,080 five-second spectrogram examples.
+There are 37,019 spectrograms still awaiting review, 13 labeled `litoria_aurea` examples, and 48 labeled `non_target` examples.
+No model or inference result has been saved yet.
 
-## What we implemented
+The preprocessing stage is complete for the external recording set.
+The active work is data-quality and evaluation hardening followed by purposeful expansion of the labeled set.
 
-### 1) Dataset traversal (nested)
+## Canonical repository layout
 
-- Uses `os.walk` to discover audio files under `Data/raw/`.
-- Supported extensions: `.wav`, `.mp3`.
-- Preserves the directory structure under `raw/` when writing outputs under `Data/spectrograms/`.
-
-### 2) Audio loading and slicing
-
-- Loads audio with `librosa.load(..., sr=22050, mono=True)` by default (configurable via CLI).
-- Slices each file into **5-second non-overlapping chunks**.
-- Drops any leftover tail shorter than 5 seconds (no padding).
-
-### 3) Spectrogram generation
-
-- Creates a **Mel-spectrogram** per chunk:
-  - `n_mels = 128`
-  - `fmin = 0` (default)
-  - `fmax = 8000` (default)
-- Converts power spectrogram to dB (log scale) and saves as an **axis-free PNG** (headless-safe via Matplotlib `Agg` backend).
-
-### 4) Naming convention
-
-Each PNG includes:
-
-- the original audio **base name**, and
-- the **chunk start time** in seconds.
-
-Example:
-
-- If the file is `recording01.wav`, the chunk starting at 30 seconds becomes:
-  - `recording01_start30s.png`
-
-The folder path under `Data/spectrograms/` mirrors `Data/raw/`, e.g.:
-
-- `Data/raw/1A/.../recording01.wav`
-- `Data/spectrograms/1A/.../recording01_start30s.png`
-
-## How to run
-
-From the repo root:
-
-```bash
-python src/slice_audio.py
+```text
+frog-classifier/
+  raw/
+    external/                     # original external recordings
+    ponds/                        # original pond recordings
+  processed/
+    external/
+      spectrograms/               # generated five-second Mel-spectrogram PNGs
+      chunks/                     # cached five-second WAV files for playback
+    ponds/
+      spectrograms/
+      chunks/
+  labeled/
+    litoria_aurea/                # positive target examples
+    non_target/                   # negative examples
+    manifest.csv                  # grouped train, validation, and test assignments
+  dataset/
+    train/{litoria_aurea,non_target}/
+    val/{litoria_aurea,non_target}/
+    test/{litoria_aurea,non_target}/
+  models/                         # saved model artifacts
+  results/analytics/              # inference and analysis outputs
+  classifier_app/                 # reserved application package
+  scripts/                        # current command-line and labeling tools
+  docs/                           # design and project documentation
 ```
 
-Run on your "good data" tree (example):
+Raw audio and generated artifacts are ignored by Git.
+Only `.gitkeep` placeholders are tracked beneath the data and artifact roots.
 
-```bash
-python src/slice_audio.py --raw-root "Data/good data" --out-root "Data/spectrograms" --out-subdir "good_data"
+## Environment setup
+
+Python 3.13 is the supported runtime.
+`pyproject.toml` is the source of truth for direct dependencies, and `uv.lock` records the exact resolved environment.
+
+For development, install [uv](https://docs.astral.sh/uv/) and run:
+
+```powershell
+uv sync --frozen
 ```
 
-Quick demo (process only the first 2 files per top-level folder):
+To run the graphical labeler on Windows without using uv directly, double-click `Launch_Labeler.bat`.
+The launcher creates `.venv`, installs the generated locked dependency export, and opens the Streamlit interface.
 
-```bash
-python src/slice_audio.py --raw-root "Data/good data" --out-root "Data/spectrograms" --out-subdir "good_data" --limit-files 2
+`requirements_labeler.txt` is generated from `uv.lock` and must not be edited manually.
+After intentionally changing direct dependency constraints, regenerate the lock and compatibility export with:
+
+```powershell
+uv lock
+uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file requirements_labeler.txt
 ```
 
-Note: AudioMoth recordings in `Data/good data/` are often 48 kHz (see `CONFIG.TXT`), but we **resample to 22050 Hz by default** for consistency. You can override with `--sample-rate`.
+## Audio traversal and spectrogram generation
 
-What you should see:
+The generator is `scripts/slice_audio.py`.
+It recursively discovers `.wav` and `.mp3` recordings, preserves their relative folder structure, and writes one PNG for each complete chunk.
 
-- A progress bar per pond folder (top-level directory under `Data/raw/`), e.g. “Processing pond 1A”.
-- A final summary: how many PNGs were written and where.
+The current defaults are:
 
-## Dependencies
+- Input root: `raw/external`
+- Output root: `processed/external/spectrograms`
+- Sample rate: 22,050 Hz mono
+- Chunk duration: five seconds
+- Chunk overlap: none
+- Mel bins: 128
+- Frequency range: 0 Hz to 8,000 Hz
+- Final partial chunk: dropped without padding
 
-The script expects these Python packages to be installed:
+Each filename records the original recording stem and chunk start time.
+For example, `recording01_start30s.png` represents the five-second window beginning at 30 seconds in `recording01.wav`.
 
-- `librosa`
-- `numpy`
-- `matplotlib`
-- `tqdm`
+Process the default external recordings with:
 
-## Manual labeling (spectrogram review → training folders)
-
-We added an interactive labeling script to quickly sort spectrogram PNGs into two classes:
-
-- **Frog present**: `Data/training_data/litoria_aurea/`
-- **Background/other**: `Data/training_data/background/`
-
-### Script
-
-- `src/label_spectrograms.py`
-
-What it does:
-
-- Reads PNGs from `Data/spectrograms/` (recursive).
-- Displays each image (loaded via PIL) and waits for a keypress:
-  - `y` → move image to `litoria_aurea`
-  - `n` → move image to `background`
-  - `s` → skip
-  - `q` / `esc` → quit
-- Prints progress like: `Image 12 of 500`.
-- Tries to locate and play the matching **5-second audio chunk** from `Data/processed/` using the PNG filename (expects `*_start{N}s`).
-
-### Demo run 
-
-Run on only a small number of images first:
-
-```bash
-python src/label_spectrograms.py --limit 12 --shuffle
+```powershell
+uv run python scripts/slice_audio.py
 ```
 
-Demo run on the **good data** spectrograms:
+Run a small external-data smoke sample with:
 
-```bash
-python src/label_spectrograms.py --spectrogram-root "Data/spectrograms/good_data" --raw-root "Data/good data" --processed-root "Data/processed/good_data" --limit 12 --shuffle
+```powershell
+uv run python scripts/slice_audio.py --limit-files 2
 ```
 
-### Full run later
+Process pond recordings into their separate tree with:
 
-When ready to label everything:
-
-```bash
-python src/label_spectrograms.py --limit 0 --shuffle
+```powershell
+uv run python scripts/slice_audio.py --raw-root raw/ponds --out-root processed/ponds/spectrograms
 ```
 
-### Audio playback note
+The script logs individual file errors and continues processing the remaining recordings.
 
-Audio playback currently supports **WAV** chunks only (uses Windows `winsound` by default; can use `simpleaudio` if installed).
+## Manual labeling
 
-Expected chunk location pattern:
+The recommended interface is `scripts/label_frontend.py`, launched through `Launch_Labeler.bat`.
+It displays a spectrogram, locates or exports the matching five-second WAV chunk, and moves the PNG into one of the canonical label directories.
 
-- `Data/spectrograms/<subfolders>/<name>_start30s.png`
-- `Data/processed/<subfolders>/<name>_start30s.wav`
+The two label directories are:
 
-If the matching processed chunk does not exist, the script will (by default) export that 5-second window from `Data/raw/` into `Data/processed/` on-demand and play it.
+- Positive target: `labeled/litoria_aurea`
+- Negative example: `labeled/non_target`
 
-## Labeling UI (web frontend — recommended)
+The Streamlit interface provides Frog, Background, Skip, Replay, Undo, and session controls.
+The Background button writes to the canonical `non_target` filesystem label.
 
-If the Matplotlib window closes unexpectedly or terminal key capture is flaky, use the Streamlit frontend.
+The terminal and Matplotlib alternative is:
 
-### Script
-
-- `src/label_frontend.py`
-
-### Install + run
-
-```bash
-pip install streamlit
-streamlit run src/label_frontend.py
+```powershell
+uv run python scripts/label_spectrograms.py --limit 12 --shuffle
 ```
 
-### One-click launcher (Windows, non-technical)
+Use `--limit 0` only when intentionally starting an unrestricted session.
+The labeler defaults to the external spectrogram, raw-audio, and cached-chunk trees.
+Pass the corresponding pond paths together when labeling pond data so audio lookup remains deterministic.
 
-Double-click:
-- `Launch_Labeler.bat`
+## Manifest generation
 
-First run will:
-- create a local `.venv/`
-- install dependencies from `requirements_labeler.txt`
-- open the UI in your browser
+The manifest builder is `scripts/build_manifest.py`.
+It scans `labeled/litoria_aurea` and `labeled/non_target`, parses recording IDs and start times from filenames, and writes `labeled/manifest.csv`.
 
-In the sidebar, confirm these defaults (or adjust):
-- `spectrogram_root`: `Data/spectrograms/good_data`
-- `raw_root`: `Data/good data`
-- `processed_root`: `Data/processed/good_data`
-- `training_root`: `Data/training_data`
+Generate the manifest with:
 
-This UI provides:
-- persistent image viewer
-- reliable **Frog / Background / Skip** buttons
-- **Replay audio** button
-
-## Notes / decisions (so far)
-
-- **Chunking**: fixed 5-second chunks; remainder is dropped (no padding) to keep consistent shapes.
-- **Outputs**: PNGs are stored without axes/ticks to make them easier to use as ML inputs.
-- **Robustness**: per-file errors are logged and the run continues with remaining files.
-
-## Leakage-safe splitting (manifest.csv)
-
-Chunks from the same 5-minute recording are highly correlated. To avoid train/val/test leakage, we split by **recording** (or **day**), not by chunk.
-
-### Script
-
-- `src/build_manifest.py`
-
-### Example
-
-```bash
-python src/build_manifest.py --training-root "Data/training_data" --out-csv "Data/training_data/manifest.csv"
+```powershell
+uv run python scripts/build_manifest.py
 ```
 
-## Baseline training (sanity check)
+The CSV columns are:
 
-### Script
-
-- `src/train_baseline.py`
-
-### Example
-
-```bash
-python src/train_baseline.py --manifest "Data/training_data/manifest.csv"
+```text
+image_path,label,label_name,recording_id,start_s,split
 ```
 
-## Next steps (suggested)
+All chunks from the same recording are assigned to the same split to prevent direct recording leakage.
+The current splitter is not class-stratified, so its validation and test partitions must not be trusted until Phase 2 of the roadmap is complete.
 
-- Add a `requirements.txt` (or `pyproject.toml`) to pin versions for reproducibility.
-- Consider adding optional:
-  - padding for last chunk vs dropping remainder
-  - amplitude normalization
-  - resampling quality controls
-  - parallel processing (CPU-bound parts) if runtime becomes large
-- Decide training input format:
-  - use PNG images directly, or
-  - save spectrogram tensors (`.npy`) for faster training I/O.
+## Baseline training
 
+The baseline trainer is `scripts/train_baseline.py`.
+It resizes spectrograms to small grayscale arrays and trains a balanced logistic-regression classifier as a pipeline sanity check.
+
+Run it after generating a manifest:
+
+```powershell
+uv run python scripts/train_baseline.py
+```
+
+The script reports train, validation, and test metrics in memory.
+It does not save a model and is not the planned production classifier.
+Metrics from a partition that lacks either class are not meaningful.
+
+## Stable processing decisions
+
+- Chunking uses fixed five-second, non-overlapping windows.
+- Incomplete final chunks are dropped instead of padded.
+- Spectrograms are stored as axis-free PNG files for inspection and image-model compatibility.
+- Raw-to-processed relative paths are preserved until labeling.
+- Labeled images use `litoria_aurea` and `non_target` as canonical class names.
+- Manifest splits group by source recording to reduce leakage.
+- Raw audio is treated as immutable source material.
+
+## Next milestone
+
+Phase 2 of the roadmap makes evaluation trustworthy before more model development proceeds.
+It adds group-aware class balancing, split validation, filename and path tests, and safeguards for duplicate or unparseable examples.

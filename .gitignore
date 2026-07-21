@@ -1,17 +1,21 @@
 # Virtual environment
 .venv/
 
-# Raw audio (never modify, never commit)
-raw/
+# Data and generated artifacts
+raw/**
+processed/**
+labeled/**
+dataset/**
+models/**
+results/**
 
-# Generated data
-processed/
-labeled/
-dataset/
-models/
-results/
-
-# Keep folder structure
+# Keep folder structure while ignoring generated contents
+!raw/**/
+!processed/**/
+!labeled/**/
+!dataset/**/
+!models/**/
+!results/**/
 !**/.gitkeep
 
 # Python cache

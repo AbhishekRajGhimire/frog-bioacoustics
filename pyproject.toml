@@ -1,0 +1,19 @@
+[project]
+name = "frog-classifier"
+version = "0.1.0"
+description = "Tools for preparing, labeling, training, and analyzing frog-call recordings."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "librosa>=0.11,<0.12",
+    "matplotlib>=3.10,<3.11",
+    "numpy>=2.3,<2.4",
+    "pillow>=12.1,<12.2",
+    "scikit-learn>=1.8,<1.9",
+    "simpleaudio==1.0.4",
+    "streamlit>=1.54,<1.55",
+    "tqdm>=4.67,<4.68",
+]
+
+[tool.uv]
+package = false
+link-mode = "copy"

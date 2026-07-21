@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+import re
+import subprocess
+import tomllib
+import unittest
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+PLACEHOLDERS = (
+    "raw/external/.gitkeep",
+    "raw/ponds/.gitkeep",
+    "processed/external/chunks/.gitkeep",
+    "processed/external/spectrograms/.gitkeep",
+    "processed/ponds/chunks/.gitkeep",
+    "processed/ponds/spectrograms/.gitkeep",
+    "labeled/litoria_aurea/.gitkeep",
+    "labeled/non_target/.gitkeep",
+    "dataset/train/litoria_aurea/.gitkeep",
+    "dataset/train/non_target/.gitkeep",
+    "dataset/val/litoria_aurea/.gitkeep",
+    "dataset/val/non_target/.gitkeep",
+    "dataset/test/litoria_aurea/.gitkeep",
+    "dataset/test/non_target/.gitkeep",
+    "models/.gitkeep",
+    "results/analytics/.gitkeep",
+)
+
+GENERATED_PATHS = (
+    "raw/external/example.WAV",
+    "processed/external/chunks/example.wav",
+    "processed/external/spectrograms/example.png",
+    "labeled/litoria_aurea/example.png",
+    "dataset/train/litoria_aurea/example.png",
+    "models/example.pkl",
+    "results/analytics/example.csv",
+)
+
+RUNTIME_DEPENDENCIES = {
+    "librosa",
+    "matplotlib",
+    "numpy",
+    "pillow",
+    "scikit-learn",
+    "simpleaudio",
+    "streamlit",
+    "tqdm",
+}
+
+EXPECTED_RUNTIME_REQUIREMENTS = {
+    "librosa>=0.11,<0.12",
+    "matplotlib>=3.10,<3.11",
+    "numpy>=2.3,<2.4",
+    "pillow>=12.1,<12.2",
+    "scikit-learn>=1.8,<1.9",
+    "simpleaudio==1.0.4",
+    "streamlit>=1.54,<1.55",
+    "tqdm>=4.67,<4.68",
+}
+
+OPERATIONAL_TEXT_FILES = (
+    "PROCESS.md",
+    "docs/system design.md",
+    "scripts/build_manifest.py",
+    "scripts/label_spectrograms.py",
+    "scripts/slice_audio.py",
+    "scripts/train_baseline.py",
+)
+
+STALE_LAYOUT_TOKENS = ("Data/", "Data\\", "src/", "src\\")
+
+
+def git_path_is_ignored(relative_path: str) -> bool:
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", "--quiet", relative_path],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    if result.returncode not in (0, 1):
+        raise RuntimeError(f"git check-ignore failed for {relative_path}: {result.returncode}")
+    return result.returncode == 0
+
+
+class RepositoryLayoutTests(unittest.TestCase):
+    def test_generated_files_are_ignored_and_placeholders_are_trackable(self) -> None:
+        for relative_path in GENERATED_PATHS:
+            with self.subTest(generated=relative_path):
+                self.assertTrue(git_path_is_ignored(relative_path))
+
+        for relative_path in PLACEHOLDERS:
+            with self.subTest(placeholder=relative_path):
+                self.assertTrue((REPO_ROOT / relative_path).is_file())
+                self.assertFalse(git_path_is_ignored(relative_path))
+
+        for split in ("train", "val", "test"):
+            self.assertFalse((REPO_ROOT / "dataset" / split / "bell_frog" / ".gitkeep").exists())
+
+    def test_text_and_binary_git_attributes_are_explicit(self) -> None:
+        attributes_path = REPO_ROOT / ".gitattributes"
+        self.assertTrue(attributes_path.is_file())
+        attributes = attributes_path.read_text(encoding="utf-8")
+        self.assertIn("* text=auto eol=lf", attributes)
+        for pattern in ("*.docx binary", "*.png binary", "*.wav binary", "*.WAV binary", "*.xlsx binary"):
+            with self.subTest(pattern=pattern):
+                self.assertIn(pattern, attributes)
+
+
+class DependencyMetadataTests(unittest.TestCase):
+    def test_dependency_metadata_and_compatibility_export_agree(self) -> None:
+        pyproject_path = REPO_ROOT / "pyproject.toml"
+        lock_path = REPO_ROOT / "uv.lock"
+        python_version_path = REPO_ROOT / ".python-version"
+        export_path = REPO_ROOT / "requirements_labeler.txt"
+
+        self.assertTrue(pyproject_path.is_file())
+        self.assertTrue(lock_path.is_file())
+        self.assertEqual(python_version_path.read_text(encoding="utf-8").strip(), "3.13")
+
+        pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        self.assertEqual(pyproject["project"]["requires-python"], ">=3.13,<3.14")
+        self.assertIn("link-mode", pyproject["tool"]["uv"])
+        self.assertEqual(pyproject["tool"]["uv"]["link-mode"], "copy")
+        self.assertEqual(set(pyproject["project"]["dependencies"]), EXPECTED_RUNTIME_REQUIREMENTS)
+        direct_names = {
+            re.split(r"[<>=!~\[]", requirement, maxsplit=1)[0].strip().lower()
+            for requirement in pyproject["project"]["dependencies"]
+        }
+        self.assertEqual(direct_names, RUNTIME_DEPENDENCIES)
+
+        exported_names = {
+            line.split("==", maxsplit=1)[0].strip().lower()
+            for line in export_path.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith(("#", "-")) and "==" in line
+        }
+        self.assertTrue(RUNTIME_DEPENDENCIES.issubset(exported_names))
+
+        launcher = (REPO_ROOT / "Launch_Labeler.bat").read_text(encoding="utf-8")
+        self.assertIn("py -3.13", launcher)
+        self.assertIn("Python 3.13", launcher)
+        self.assertIn("requirements_labeler.txt", launcher)
+
+
+class OperationalDocumentationTests(unittest.TestCase):
+    def test_operational_text_uses_the_canonical_layout(self) -> None:
+        for relative_path in OPERATIONAL_TEXT_FILES:
+            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            for stale_token in STALE_LAYOUT_TOKENS:
+                with self.subTest(file=relative_path, token=stale_token):
+                    self.assertNotIn(stale_token, text)
+
+    def test_roadmap_covers_every_approved_phase(self) -> None:
+        roadmap_path = REPO_ROOT / "roadmap.md"
+        self.assertTrue(roadmap_path.is_file())
+        roadmap = roadmap_path.read_text(encoding="utf-8")
+        for phase in range(1, 8):
+            with self.subTest(phase=phase):
+                self.assertIn(f"## Phase {phase}:", roadmap)
+        self.assertIn("Status: Next", roadmap)
+        self.assertIn("Status: Planned", roadmap)
+
+
+if __name__ == "__main__":
+    unittest.main()

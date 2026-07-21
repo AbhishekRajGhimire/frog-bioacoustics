@@ -7,9 +7,9 @@ We split by recording_id (not by chunk) to avoid leakage: chunks from the same
 recording are highly correlated.
 
 Expected labeled folder layout:
-  Data/training_data/
+  labeled/
     litoria_aurea/*.png
-    background/*.png
+    non_target/*.png
 
 Expected filename convention:
   <recording_id>_start{N}s.png
@@ -154,4 +154,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
