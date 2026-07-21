@@ -4,17 +4,16 @@ from __future__ import annotations
 Baseline training on labeled spectrogram PNGs.
 
 This is intentionally simple and dependency-light:
-  - loads labeled/manifest.csv (from build_manifest.py)
+  - loads and validates labeled/manifest.csv (from build_manifest.py)
   - converts PNGs -> small grayscale arrays
   - trains a Logistic Regression classifier (scikit-learn)
-  - reports metrics on val/test splits (if available)
+  - reports metrics on train, validation, and test splits
 
 This is a sanity-check baseline. Once you have enough labels, you’ll likely move
 to a CNN (PyTorch) for better performance.
 """
 
 import argparse
-import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -24,22 +23,15 @@ from PIL import Image
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
+from frog_classifier.data.config import load_preprocessing_config
+from frog_classifier.data.manifest import load_manifest
+
 
 @dataclass(frozen=True)
 class Example:
     path: Path
     y: int
     split: str
-
-
-def load_manifest(repo_root: Path, manifest_path: Path) -> list[Example]:
-    out: list[Example] = []
-    with manifest_path.open("r", newline="", encoding="utf-8") as f:
-        r = csv.DictReader(f)
-        for row in r:
-            p = repo_root / Path(row["image_path"])
-            out.append(Example(path=p, y=int(row["label"]), split=row.get("split", "train")))
-    return out
 
 
 def featurize(paths: Iterable[Path], *, size: int) -> np.ndarray:
@@ -73,21 +65,16 @@ def main() -> int:
     if not manifest.exists():
         raise FileNotFoundError(f"manifest not found: {manifest}")
 
-    examples = load_manifest(repo_root, manifest)
-    examples = [e for e in examples if e.path.exists()]
-    if not examples:
-        print("No examples found (manifest paths missing).")
-        return 0
+    config = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
+    rows = load_manifest(manifest, repo_root, config)
+    examples = [
+        Example(repo_root / Path(row.image_path), row.label, row.split)
+        for row in rows
+    ]
 
     train = [e for e in examples if e.split == "train"]
     val = [e for e in examples if e.split == "val"]
     test = [e for e in examples if e.split == "test"]
-
-    # Fallback: if split is too tiny, treat everything as train.
-    if len(train) < 2:
-        train = examples
-        val = []
-        test = []
 
     y_train = np.array([e.y for e in train], dtype=np.int64)
     if len(set(y_train.tolist())) < 2:
@@ -108,23 +95,16 @@ def main() -> int:
     # Train metrics (sanity check)
     eval_split("train", y_train, clf.predict(X_train))
 
-    if val:
-        X_val = featurize([e.path for e in val], size=int(args.size))
-        y_val = np.array([e.y for e in val], dtype=np.int64)
-        eval_split("val", y_val, clf.predict(X_val))
-    else:
-        print("\n(no val split examples yet)")
+    X_val = featurize([e.path for e in val], size=int(args.size))
+    y_val = np.array([e.y for e in val], dtype=np.int64)
+    eval_split("val", y_val, clf.predict(X_val))
 
-    if test:
-        X_test = featurize([e.path for e in test], size=int(args.size))
-        y_test = np.array([e.y for e in test], dtype=np.int64)
-        eval_split("test", y_test, clf.predict(X_test))
-    else:
-        print("\n(no test split examples yet)")
+    X_test = featurize([e.path for e in test], size=int(args.size))
+    y_test = np.array([e.y for e in test], dtype=np.int64)
+    eval_split("test", y_test, clf.predict(X_test))
 
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
