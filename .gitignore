@@ -4,6 +4,9 @@
 # Isolated development worktrees
 .worktrees/
 
+# Local subagent execution state
+.superpowers/
+
 # Data and generated artifacts
 raw/**
 processed/**
