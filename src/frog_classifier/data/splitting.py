@@ -52,14 +52,23 @@ def create_split_plan(
     groups_by_label: dict[int, set[str]] = defaultdict(set)
     for example in ordered:
         groups_by_label[example.label].add(example.recording_id)
+    expected_labels = {0, 1}
     issues = tuple(
         ManifestIssue(
-            "insufficient_class_groups",
-            f"label {label} has {len(groups)} groups but {folds} are required",
+            "unexpected_label",
+            "label must be 0 or 1",
             str(label),
         )
-        for label, groups in sorted(groups_by_label.items())
-        if len(groups) < folds
+        for label in sorted(set(groups_by_label) - expected_labels)
+    ) + tuple(
+        ManifestIssue(
+            "insufficient_class_groups",
+            f"label {label} has {len(groups_by_label[label])} groups "
+            f"but {folds} are required",
+            str(label),
+        )
+        for label in sorted(expected_labels)
+        if len(groups_by_label[label]) < folds
     )
     if issues:
         raise ManifestValidationError(issues)
@@ -78,7 +87,6 @@ def create_split_plan(
         for index in held_out:
             assignments[int(index)] = fold
 
-    expected_labels = set(groups_by_label)
     fold_issues = []
     for fold in range(folds):
         observed = {

@@ -4,7 +4,7 @@ import unittest
 
 from frog_classifier.data.manifest import LabeledExample
 from frog_classifier.data.splitting import create_split_plan
-from frog_classifier.data.validation import ManifestValidationError
+from frog_classifier.data.validation import ManifestIssue, ManifestValidationError
 
 
 def synthetic_examples(
@@ -96,6 +96,49 @@ class CreateSplitPlanTests(unittest.TestCase):
             ["insufficient_class_groups"],
         )
 
+    def test_rejects_single_class_input_with_enough_groups(self) -> None:
+        self.assert_manifest_issues(
+            synthetic_examples(negative_groups=0),
+            (ManifestIssue(
+                "insufficient_class_groups",
+                "label 0 has 0 groups but 5 are required",
+                "0",
+            ),),
+        )
+
+    def test_rejects_empty_input(self) -> None:
+        self.assert_manifest_issues(
+            (),
+            (
+                ManifestIssue(
+                    "insufficient_class_groups",
+                    "label 0 has 0 groups but 5 are required",
+                    "0",
+                ),
+                ManifestIssue(
+                    "insufficient_class_groups",
+                    "label 1 has 0 groups but 5 are required",
+                    "1",
+                ),
+            ),
+        )
+
+    def test_rejects_unexpected_numeric_label(self) -> None:
+        examples = list(synthetic_examples())
+        examples[0] = LabeledExample(
+            example_id=examples[0].example_id,
+            image_path=examples[0].image_path,
+            label=2,
+            label_name=examples[0].label_name,
+            recording_id=examples[0].recording_id,
+            start_s=examples[0].start_s,
+        )
+
+        self.assert_manifest_issues(
+            tuple(examples),
+            (ManifestIssue("unexpected_label", "label must be 0 or 1", "2"),),
+        )
+
     def test_rejects_fewer_than_three_folds(self) -> None:
         with self.assertRaises(ManifestValidationError) as raised:
             create_split_plan(synthetic_examples(), folds=2)
@@ -124,6 +167,23 @@ class CreateSplitPlanTests(unittest.TestCase):
                     [issue.code for issue in raised.exception.issues],
                     ["invalid_fold_selection"],
                 )
+
+    def assert_manifest_issues(
+        self,
+        examples: tuple[LabeledExample, ...],
+        expected: tuple[ManifestIssue, ...],
+    ) -> None:
+        try:
+            create_split_plan(examples)
+        except ManifestValidationError as error:
+            self.assertEqual(error.issues, expected)
+        except Exception as error:
+            self.fail(
+                "expected ManifestValidationError, "
+                f"got {type(error).__name__}: {error}"
+            )
+        else:
+            self.fail("expected ManifestValidationError")
 
 
 if __name__ == "__main__":
