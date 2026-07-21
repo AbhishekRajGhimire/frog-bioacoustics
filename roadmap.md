@@ -62,7 +62,7 @@ Make a fresh clone reproduce the intended project structure, Python environment,
 
 ## Phase 2: Data integrity and trustworthy evaluation
 
-Status: Next
+Status: Complete
 
 ### Purpose
 
@@ -88,9 +88,21 @@ Ensure every reported metric is based on valid, leakage-safe data containing bot
 - A generated data-quality report explains exactly what enters training and evaluation.
 - Repeated runs with the same seed produce the same validated split.
 
+### Verified acceptance
+
+Verified on July 22, 2026:
+
+- The complete repository suite passed 66 tests with zero failures.
+- The real manifest contains 61 examples from 60 recording groups: 13 `litoria_aurea` examples from 13 groups and 48 `non_target` examples from 47 groups.
+- Fold class counts for `litoria_aurea` and `non_target` examples are fold 0: 3 and 10, fold 1: 3 and 9, fold 2: 2 and 10, fold 3: 2 and 10, and fold 4: 3 and 9.
+- Split class counts for `litoria_aurea` and `non_target` examples are train: 7 and 29, validation: 3 and 9, and test: 3 and 10.
+- Two consecutive manifest generations produced identical SHA-256 values: `6fb0b3bacf9ab6371cbaeeff9d74fa238e9523cadd0921bc4f2aa298b765e831` for the CSV, `d272255ba1315108792bce3c4a1d769b776075eae9b9f173cda7b09562753944` for the JSON report, and `5fa127a72fdce136cce97b2530086bf652f7e8835a4b23c58a96185ce7ef72ce` for the Markdown report.
+- The strict baseline produced train, validation, and test metrics without a fallback or missing-partition path.
+- The 13 positive examples leave only two or three positives in each fold, so grouped validation metrics remain statistically unstable until Phase 3 expands positive label coverage.
+
 ## Phase 3: Purposeful label expansion
 
-Status: Planned
+Status: Next
 
 ### Purpose
 

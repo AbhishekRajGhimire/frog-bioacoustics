@@ -104,3 +104,38 @@ uv run python scripts/train_baseline.py
 
 The baseline is a pipeline and evaluation sanity check.
 It does not save a model or perform recording inference.
+
+## Verify Phase 2 acceptance
+
+Run the real-data manifest twice and compare all three generated artifacts:
+
+```powershell
+uv run python scripts/build_manifest.py
+Get-Content -LiteralPath results/data_quality/manifest-report.md
+Get-FileHash -Algorithm SHA256 -LiteralPath labeled/manifest.csv, results/data_quality/manifest-report.json, results/data_quality/manifest-report.md
+uv run python scripts/build_manifest.py
+Get-FileHash -Algorithm SHA256 -LiteralPath labeled/manifest.csv, results/data_quality/manifest-report.json, results/data_quality/manifest-report.md
+```
+
+The verified output paths are:
+
+- `labeled/manifest.csv`
+- `results/data_quality/manifest-report.json`
+- `results/data_quality/manifest-report.md`
+
+The July 22, 2026 acceptance run produced 61 examples from 60 recording groups and identical SHA-256 values across both generations.
+Every fold and split contained both canonical classes.
+
+Run the strict baseline and the complete repository verification:
+
+```powershell
+uv run python scripts/train_baseline.py
+uv lock --check
+uv sync --frozen
+uv pip check
+uv run python -m unittest discover -s tests -v
+uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/label_spectrograms.py scripts/slice_audio.py scripts/train_baseline.py
+git diff --check
+```
+
+The verified acceptance run passed 66 tests with zero failures, compiled every operational script, and reported compatible locked dependencies.
