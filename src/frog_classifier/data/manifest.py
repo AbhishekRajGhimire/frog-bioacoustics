@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,10 +9,35 @@ from typing import TYPE_CHECKING, Sequence
 
 from .config import PreprocessingConfig
 from .naming import ExampleNameError, ExampleKey, parse_example_filename
-from .validation import ManifestIssue, ManifestValidationError
+from .validation import (
+    ManifestIssue,
+    ManifestValidationError,
+    validate_manifest_rows,
+)
 
 if TYPE_CHECKING:
     from .splitting import SplitPlan
+
+
+MANIFEST_COLUMNS = (
+    "manifest_version",
+    "example_id",
+    "image_path",
+    "label",
+    "label_name",
+    "recording_id",
+    "start_s",
+    "fold",
+    "split",
+    "preprocessing_config_sha256",
+)
+
+_INTEGER_COLUMNS = (
+    "manifest_version",
+    "label",
+    "start_s",
+    "fold",
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +62,84 @@ class ManifestRow:
     fold: int
     split: str
     preprocessing_config_sha256: str
+
+
+def serialize_manifest(rows: Sequence[ManifestRow]) -> bytes:
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=MANIFEST_COLUMNS)
+    writer.writeheader()
+    for row in sorted(rows, key=lambda candidate: candidate.image_path):
+        writer.writerow({
+            column: getattr(row, column)
+            for column in MANIFEST_COLUMNS
+        })
+    return output.getvalue().encode("utf-8")
+
+
+def load_manifest(
+    path: Path,
+    repo_root: Path,
+    config: PreprocessingConfig,
+) -> tuple[ManifestRow, ...]:
+    rows: list[ManifestRow] = []
+    issues: list[ManifestIssue] = []
+    with path.open("r", encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != list(MANIFEST_COLUMNS):
+            raise ManifestValidationError((ManifestIssue(
+                "invalid_manifest_columns",
+                f"expected columns {list(MANIFEST_COLUMNS)!r}",
+                str(path),
+            ),))
+
+        for line_number, record in enumerate(reader, start=2):
+            if None in record or any(
+                record.get(column) is None
+                for column in MANIFEST_COLUMNS
+            ):
+                issues.append(ManifestIssue(
+                    "invalid_manifest_row",
+                    "row must contain exactly one value for every manifest column",
+                    f"row {line_number}",
+                ))
+                continue
+            parsed_integers: dict[str, int] = {}
+            for column in _INTEGER_COLUMNS:
+                try:
+                    parsed_integers[column] = int(record[column])
+                except (TypeError, ValueError):
+                    issues.append(ManifestIssue(
+                        "invalid_manifest_integer",
+                        "value must be an integer",
+                        f"row {line_number}: {column}",
+                    ))
+            if len(parsed_integers) != len(_INTEGER_COLUMNS):
+                continue
+            rows.append(ManifestRow(
+                manifest_version=parsed_integers["manifest_version"],
+                example_id=record["example_id"],
+                image_path=record["image_path"],
+                label=parsed_integers["label"],
+                label_name=record["label_name"],
+                recording_id=record["recording_id"],
+                start_s=parsed_integers["start_s"],
+                fold=parsed_integers["fold"],
+                split=record["split"],
+                preprocessing_config_sha256=record[
+                    "preprocessing_config_sha256"
+                ],
+            ))
+
+    if issues:
+        raise ManifestValidationError(issues)
+    loaded_rows = tuple(sorted(rows, key=lambda row: row.image_path))
+    validate_manifest_rows(
+        loaded_rows,
+        repo_root,
+        config.classes,
+        config.sha256,
+    )
+    return loaded_rows
 
 
 def build_manifest_rows(
