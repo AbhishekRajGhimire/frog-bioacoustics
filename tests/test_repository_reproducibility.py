@@ -193,6 +193,16 @@ class DependencyMetadataTests(unittest.TestCase):
 
 
 class OperationalDocumentationTests(unittest.TestCase):
+    def test_outline_requires_staged_diff_review_before_commit(self) -> None:
+        outline_lines = (REPO_ROOT / "docs/outline.md").read_text(encoding="utf-8").splitlines()
+        for command in (
+            "git diff --cached --check",
+            "git diff --cached",
+            "git status --short",
+        ):
+            with self.subTest(command=command):
+                self.assertIn(command, outline_lines)
+
     def test_operational_text_uses_the_canonical_layout(self) -> None:
         for relative_path in OPERATIONAL_TEXT_FILES:
             text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")

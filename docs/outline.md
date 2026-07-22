@@ -123,8 +123,9 @@ frog-bioacoustics/
 ```
 
 The most important boundary is between `scripts/` and `src/`.
-Files in `scripts/` are thin command entry points.
-Reusable behavior belongs in `src/frog_classifier`, where it can be imported and tested without running an entire command.
+`scripts/` contains runnable entry points.
+Phase 2 manifest and validation behavior is factored into `src/frog_classifier/data/`.
+New reusable behavior should follow that boundary so it can be imported and tested without running an entire command.
 
 ## What Git tracks
 
@@ -305,11 +306,17 @@ git status --short
 ### 7. Review and commit
 
 Read the diff before staging it.
-Stage only intended files and use a short commit message that explains the change.
+Stage only intended files.
+Replace `docs/outline.md` in the example with every intended path for your change.
+After staging, inspect the staged diff and check it before committing.
+Use a short commit message that explains the change.
 
 ```powershell
 git diff
 git add docs/outline.md
+git diff --cached --check
+git diff --cached
+git status --short
 git commit -m "docs: improve beginner project outline"
 ```
 
