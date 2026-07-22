@@ -123,6 +123,7 @@ The verified output paths are:
 - `results/data_quality/manifest-report.json`
 - `results/data_quality/manifest-report.md`
 
+The verified run used seed `1337` with five folds: fold 0 was test, fold 1 was validation, and folds 2 through 4 were training.
 The July 22, 2026 acceptance run produced 61 examples from 60 recording groups and identical SHA-256 values across both generations.
 Every fold and split contained both canonical classes.
 
@@ -136,6 +137,23 @@ uv pip check
 uv run python -m unittest discover -s tests -v
 uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/label_spectrograms.py scripts/slice_audio.py scripts/train_baseline.py
 git diff --check
+```
+
+Scan every changed Markdown and text file for the prohibited em dash character, then inspect the intended tracked changes:
+
+```powershell
+$changedText = @(git diff --name-only -- '*.md' '*.txt')
+$emDashHits = @()
+foreach ($path in $changedText) {
+    $emDashHits += @(Select-String -LiteralPath $path -Pattern ([char]0x2014))
+}
+if ($emDashHits.Count -gt 0) {
+    $emDashHits | Format-Table Path,LineNumber,Line
+    exit 1
+}
+Write-Output ("Changed text files scanned: " + ($changedText -join ', '))
+Write-Output 'Em-dash matches: 0'
+git status --short
 ```
 
 The verified acceptance run passed 66 tests with zero failures, compiled every operational script, and reported compatible locked dependencies.
