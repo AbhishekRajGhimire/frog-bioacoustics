@@ -46,6 +46,7 @@ DATA_PACKAGE_MODULES = (
 OPERATIONAL_DOCUMENTS = (
     "README.md",
     "roadmap.md",
+    "docs/outline.md",
     "docs/architecture.md",
     "docs/workflow.md",
 )
@@ -85,6 +86,7 @@ EXPECTED_RUNTIME_REQUIREMENTS = {
 
 OPERATIONAL_TEXT_FILES = (
     "README.md",
+    "docs/outline.md",
     "docs/architecture.md",
     "docs/workflow.md",
     "scripts/build_manifest.py",
@@ -138,6 +140,12 @@ class RepositoryLayoutTests(unittest.TestCase):
                     continue
                 with self.subTest(document=relative_path, target=target):
                     self.assertTrue((document_path.parent / target_path).exists())
+
+    def test_beginner_outline_is_discoverable(self) -> None:
+        outline_path = REPO_ROOT / "docs/outline.md"
+        self.assertTrue(outline_path.is_file())
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("[project outline](docs/outline.md)", readme)
 
     def test_text_and_binary_git_attributes_are_explicit(self) -> None:
         attributes_path = REPO_ROOT / ".gitattributes"

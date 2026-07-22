@@ -5,6 +5,7 @@ The project is at the Phase 2 data-integrity checkpoint, where reliable manifest
 
 ## Start here
 
+- New to the repository? Read the beginner-friendly [project outline](docs/outline.md) first.
 - Read the [roadmap](roadmap.md) for planned phases and acceptance criteria.
 - Read the [architecture](docs/architecture.md) for storage contracts and package boundaries.
 - Read the [workflow](docs/workflow.md) for day-to-day preprocessing, labeling, manifest, and baseline commands.
