@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,6 +69,8 @@ def _value(data: dict[str, object], key: str, expected: type) -> object:
         raise ConfigError(f"{key} must be an integer")
     if expected is float and (not isinstance(value, (int, float)) or isinstance(value, bool)):
         raise ConfigError(f"{key} must be numeric")
+    if expected is float and not math.isfinite(float(value)):
+        raise ConfigError(f"{key} must be finite")
     if expected is bool and not isinstance(value, bool):
         raise ConfigError(f"{key} must be a Boolean")
     if expected is str and not isinstance(value, str):

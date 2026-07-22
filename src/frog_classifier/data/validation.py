@@ -3,8 +3,10 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
+
+from .naming import ExampleNameError, parse_example_filename
 
 if TYPE_CHECKING:
     from .manifest import ManifestRow
@@ -37,6 +39,7 @@ def validate_manifest_rows(
     repo_root: Path,
     classes: Mapping[str, int],
     config_sha256: str,
+    chunk_seconds: int,
     require_files: bool = True,
 ) -> None:
     issues: list[ManifestIssue] = []
@@ -93,6 +96,64 @@ def validate_manifest_rows(
                 "preprocessing digest must be lowercase SHA-256 matching the configuration",
                 row.example_id,
             ))
+
+        posix_path = PurePosixPath(row.image_path)
+        canonical_posix_path = posix_path.as_posix()
+        canonical_path = (
+            bool(row.image_path)
+            and "\\" not in row.image_path
+            and row.image_path == canonical_posix_path
+            and not posix_path.is_absolute()
+        )
+        if not canonical_path:
+            issues.append(ManifestIssue(
+                "invalid_image_path",
+                "image path must be a canonical POSIX repository-relative path",
+                row.image_path,
+            ))
+
+        label_directories = tuple(
+            part
+            for part in posix_path.parts[:-1]
+            if part in classes
+        )
+        if label_directories != (row.label_name,):
+            issues.append(ManifestIssue(
+                "image_label_directory_mismatch",
+                "image path must contain exactly its canonical label directory",
+                row.image_path,
+            ))
+
+        try:
+            key = parse_example_filename(
+                Path(posix_path.name),
+                chunk_seconds=chunk_seconds,
+            )
+        except ExampleNameError as error:
+            issues.append(ManifestIssue(
+                "invalid_example_filename",
+                str(error),
+                row.image_path,
+            ))
+            issues.append(ManifestIssue(
+                "manifest_identity_mismatch",
+                "row identity cannot agree with a non-canonical filename",
+                row.example_id,
+            ))
+        else:
+            if (
+                row.example_id != key.example_id
+                or row.recording_id != key.recording_id
+                or row.start_s != key.start_s
+            ):
+                issues.append(ManifestIssue(
+                    "manifest_identity_mismatch",
+                    (
+                        "example ID, recording ID, start time, and image filename "
+                        "must describe the same canonical example"
+                    ),
+                    row.example_id,
+                ))
 
         identities[(row.recording_id, row.start_s)].append(row.example_id)
         normalized_paths[row.image_path.casefold()].append(row.image_path)

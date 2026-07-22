@@ -151,7 +151,7 @@ class ManifestCsvTests(unittest.TestCase):
             replace(
                 self.rows[1],
                 example_id="enregistrement_é_start0s",
-                image_path="images/z_é.png",
+                image_path="labeled/non_target/enregistrement_é_start0s.png",
                 recording_id="enregistrement_é",
             ),
             self.rows[0],
@@ -167,7 +167,10 @@ class ManifestCsvTests(unittest.TestCase):
         parsed = list(csv.DictReader(io.StringIO(payload.decode("utf-8"))))
         self.assertEqual(
             [row["image_path"] for row in parsed],
-            ["images/litoria_aurea_0_start0s.png", "images/z_é.png"],
+            [
+                "labeled/litoria_aurea/litoria_aurea_0_start0s.png",
+                "labeled/non_target/enregistrement_é_start0s.png",
+            ],
         )
 
     def test_loads_a_serialized_manifest_round_trip(self) -> None:
@@ -251,6 +254,107 @@ class ManifestCsvTests(unittest.TestCase):
                     [issue.code for issue in raised.exception.issues],
                 )
 
+    def test_rejects_noncanonical_image_paths(self) -> None:
+        canonical = self.rows[0]
+        cases = (
+            (
+                replace(
+                    canonical,
+                    image_path=canonical.image_path.replace("/", "\\"),
+                ),
+                "invalid_image_path",
+            ),
+            (
+                replace(canonical, image_path=canonical.image_path[:-4] + ".PNG"),
+                "invalid_example_filename",
+            ),
+            (
+                replace(canonical, image_path=canonical.image_path[:-4] + ".jpg"),
+                "invalid_example_filename",
+            ),
+            (
+                replace(
+                    canonical,
+                    image_path=canonical.image_path.replace(
+                        "/litoria_aurea/",
+                        "/non_target/",
+                    ),
+                ),
+                "image_label_directory_mismatch",
+            ),
+            (
+                replace(
+                    canonical,
+                    image_path=canonical.image_path.replace(
+                        "labeled/litoria_aurea/",
+                        "images/",
+                    ),
+                ),
+                "image_label_directory_mismatch",
+            ),
+            (
+                replace(
+                    canonical,
+                    image_path=canonical.image_path.replace(
+                        canonical.example_id,
+                        "different_recording_start0s",
+                    ),
+                ),
+                "manifest_identity_mismatch",
+            ),
+        )
+        for invalid, expected_code in cases:
+            with self.subTest(image_path=invalid.image_path):
+                self._assert_rejected_row(invalid, expected_code)
+
+    def test_rejects_tampered_identity_and_chunk_start_fields(self) -> None:
+        canonical = self.rows[0]
+        cases = (
+            replace(canonical, example_id="tampered_start0s"),
+            replace(canonical, recording_id="tampered"),
+            replace(canonical, start_s=5),
+            replace(
+                canonical,
+                example_id=f"{canonical.recording_id}_start-5s",
+                image_path=(
+                    f"labeled/{canonical.label_name}/"
+                    f"{canonical.recording_id}_start-5s.png"
+                ),
+                start_s=-5,
+            ),
+            replace(
+                canonical,
+                example_id=f"{canonical.recording_id}_start3s",
+                image_path=(
+                    f"labeled/{canonical.label_name}/"
+                    f"{canonical.recording_id}_start3s.png"
+                ),
+                start_s=3,
+            ),
+        )
+        for invalid in cases:
+            with self.subTest(row=invalid):
+                self._assert_rejected_row(invalid, "manifest_identity_mismatch")
+
+    def _assert_rejected_row(
+        self,
+        row: ManifestRow,
+        expected_code: str,
+    ) -> None:
+        image_path = self.repo_root / Path(row.image_path)
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        image_path.write_bytes(b"")
+        manifest_path = self.repo_root / "tampered.csv"
+        manifest_path.write_bytes(serialize_manifest((row,) + self.rows[1:]))
+
+        with self.assertRaises(ManifestValidationError) as raised:
+            load_manifest(manifest_path, self.repo_root, self.config)
+
+        self.assertIn(
+            expected_code,
+            [issue.code for issue in raised.exception.issues],
+        )
+
     def _write_csv(
         self,
         columns: tuple[str, ...],
@@ -281,7 +385,7 @@ class ManifestCsvTests(unittest.TestCase):
                 rows.append(ManifestRow(
                     manifest_version=1,
                     example_id=example_id,
-                    image_path=f"images/{example_id}.png",
+                    image_path=f"labeled/{label_name}/{example_id}.png",
                     label=label,
                     label_name=label_name,
                     recording_id=recording_id,

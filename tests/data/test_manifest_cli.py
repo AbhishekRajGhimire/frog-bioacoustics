@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 import subprocess
 import sys
@@ -8,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from frog_classifier.data.validation import ManifestValidationError
 from tests.data.helpers import VALID_CONFIG, write_png
 
 
@@ -144,6 +146,43 @@ class BuildManifestCommandTests(unittest.TestCase):
                     expected_payloads,
                 )
 
+    def test_rejects_a_labeled_png_destination_without_replacing_it(self) -> None:
+        self._write_valid_label_tree()
+        protected_image = next(
+            (self.training_root / "litoria_aurea").glob("*.png")
+        )
+        protected_image.write_bytes(b"human label")
+
+        completed = self._run(out_csv=protected_image)
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("invalid_output_suffix", completed.stderr)
+        self.assertIn("protected_output_path", completed.stderr)
+        self.assertEqual(protected_image.read_bytes(), b"human label")
+        self.assertFalse((self.report_dir / "manifest-report.json").exists())
+        self.assertFalse((self.report_dir / "manifest-report.md").exists())
+
+    def test_rejects_non_csv_destination_without_replacing_it(self) -> None:
+        self._write_valid_label_tree()
+        invalid_destination = self.root / "outputs" / "manifest.txt"
+        invalid_destination.parent.mkdir(parents=True)
+        invalid_destination.write_bytes(b"existing")
+
+        completed = self._run(out_csv=invalid_destination)
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("invalid_output_suffix", completed.stderr)
+        self.assertEqual(invalid_destination.read_bytes(), b"existing")
+
+    def _write_valid_label_tree(self) -> None:
+        for fold_group in range(5):
+            for label_name in ("litoria_aurea", "non_target"):
+                recording_id = f"{label_name}_{fold_group}"
+                write_png(
+                    self.training_root,
+                    f"{label_name}/{recording_id}_start0s.png",
+                )
+
     def _run(
         self,
         *,
@@ -175,6 +214,79 @@ class BuildManifestCommandTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+
+class OutputPathValidationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_directory.cleanup)
+        self.repo_root = Path(temporary_directory.name).resolve()
+        self.training_root = (self.repo_root / "labeled").resolve()
+        self.config_path = (
+            self.repo_root / "config" / "preprocessing.toml"
+        ).resolve()
+        self.report_json = (
+            self.repo_root / "results" / "data_quality" / "manifest-report.json"
+        ).resolve()
+        self.report_markdown = self.report_json.with_suffix(".md")
+        self.module = self._load_script_module()
+
+    def test_rejects_protected_roots_and_input_collisions(self) -> None:
+        discovered_image = (
+            self.training_root / "litoria_aurea" / "recording_start0s.png"
+        ).resolve()
+        cases = (
+            (self.repo_root / "raw" / "manifest.csv", self.report_json),
+            (self.repo_root / "processed" / "manifest.csv", self.report_json),
+            (self.repo_root / "config" / "manifest.csv", self.report_json),
+            (self.training_root / "replacement.csv", self.report_json),
+            (self.repo_root / "outputs" / "manifest.csv", self.config_path),
+            (discovered_image, self.report_json),
+            (
+                self.repo_root / "outputs" / "manifest.csv",
+                self.repo_root / "raw" / "manifest-report.json",
+            ),
+        )
+        for out_csv, report_json in cases:
+            with self.subTest(out_csv=out_csv, report_json=report_json):
+                with self.assertRaises(ManifestValidationError) as raised:
+                    self.module._validate_output_paths(
+                        out_csv=out_csv.resolve(),
+                        report_paths=(
+                            report_json.resolve(),
+                            self.report_markdown,
+                        ),
+                        repo_root=self.repo_root,
+                        training_root=self.training_root,
+                        config_path=self.config_path,
+                        discovered_image_paths=(discovered_image,),
+                    )
+
+                self.assertIn(
+                    "protected_output_path",
+                    [issue.code for issue in raised.exception.issues],
+                )
+
+    def test_allows_the_default_manifest_inside_the_canonical_label_tree(self) -> None:
+        self.assertIsNone(self.module._validate_output_paths(
+            out_csv=(self.repo_root / "labeled" / "manifest.csv").resolve(),
+            report_paths=(self.report_json, self.report_markdown),
+            repo_root=self.repo_root,
+            training_root=self.training_root,
+            config_path=self.config_path,
+            discovered_image_paths=(),
+        ))
+
+    def _load_script_module(self):
+        specification = importlib.util.spec_from_file_location(
+            f"build_manifest_test_{id(self)}",
+            SCRIPT_PATH,
+        )
+        self.assertIsNotNone(specification)
+        self.assertIsNotNone(specification.loader)
+        module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(module)
+        return module
 
 
 if __name__ == "__main__":

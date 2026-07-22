@@ -178,6 +178,7 @@ class ValidateManifestRowsTests(unittest.TestCase):
             self.repo_root,
             CLASSES,
             CONFIG_SHA256,
+            5,
         )
 
     def _replace(self, index: int, row: ManifestRow) -> tuple[ManifestRow, ...]:
@@ -196,7 +197,7 @@ class ValidateManifestRowsTests(unittest.TestCase):
                 rows.append(ManifestRow(
                     manifest_version=1,
                     example_id=example_id,
-                    image_path=f"images/{example_id}.png",
+                    image_path=f"labeled/{label_name}/{example_id}.png",
                     label=label,
                     label_name=label_name,
                     recording_id=recording_id,

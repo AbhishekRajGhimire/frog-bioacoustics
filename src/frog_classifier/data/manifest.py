@@ -138,6 +138,7 @@ def load_manifest(
         repo_root,
         config.classes,
         config.sha256,
+        config.audio.chunk_seconds,
     )
     return loaded_rows
 

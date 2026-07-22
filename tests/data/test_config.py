@@ -106,6 +106,33 @@ interpolation = "nearest"
         with self.assertRaisesRegex(ConfigError, "classes"):
             self.load(VALID_CONFIG.replace(b"litoria_aurea = 1", b"litoria_aurea = 0"))
 
+    def test_rejects_nonfinite_spectrogram_float_values(self) -> None:
+        for value in ("nan", "inf", "-inf"):
+            with self.subTest(field="power", value=value):
+                invalid = VALID_CONFIG.replace(
+                    b"power = 2.0",
+                    f"power = {value}".encode("ascii"),
+                )
+
+                with self.assertRaisesRegex(ConfigError, "power"):
+                    self.load(invalid)
+
+    def test_rejects_nonfinite_rendering_float_values(self) -> None:
+        fields = (
+            ("figure_width_inches", "3.2"),
+            ("figure_height_inches", "3.2"),
+        )
+        for field, original in fields:
+            for value in ("nan", "inf", "-inf"):
+                with self.subTest(field=field, value=value):
+                    invalid = VALID_CONFIG.replace(
+                        f"{field} = {original}".encode("ascii"),
+                        f"{field} = {value}".encode("ascii"),
+                    )
+
+                    with self.assertRaisesRegex(ConfigError, field):
+                        self.load(invalid)
+
 
 if __name__ == "__main__":
     unittest.main()

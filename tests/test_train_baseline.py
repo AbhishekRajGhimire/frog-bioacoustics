@@ -91,6 +91,12 @@ class TrainBaselineManifestTests(unittest.TestCase):
 
         self._assert_rejected_without_fit(tuple(invalid_rows))
 
+    def test_rejects_a_manifest_with_tampered_identity_without_fitting(self) -> None:
+        invalid_rows = list(self.rows)
+        invalid_rows[0] = replace(invalid_rows[0], example_id="tampered_start0s")
+
+        self._assert_rejected_without_fit(tuple(invalid_rows))
+
     def _assert_rejected_without_fit(self, rows: tuple[ManifestRow, ...]) -> None:
         manifest_path = self._write_manifest(rows)
         module = self._load_module()
@@ -137,7 +143,7 @@ class TrainBaselineManifestTests(unittest.TestCase):
                 rows.append(ManifestRow(
                     manifest_version=1,
                     example_id=example_id,
-                    image_path=f"images/{example_id}.png",
+                    image_path=f"labeled/{label_name}/{example_id}.png",
                     label=label,
                     label_name=label_name,
                     recording_id=recording_id,

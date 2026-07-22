@@ -11,6 +11,11 @@ from typing import Iterable, Mapping, Sequence
 from .config import PreprocessingConfig
 from .manifest import ManifestRow
 from .splitting import SplitPlan
+from .validation import (
+    ManifestIssue,
+    ManifestValidationError,
+    validate_manifest_rows,
+)
 
 
 PROVENANCE_NOTE = (
@@ -65,6 +70,14 @@ def build_data_quality_report(
     manifest_payload: bytes,
     repo_root: Path,
 ) -> DataQualityReport:
+    validate_manifest_rows(
+        rows,
+        repo_root,
+        config.classes,
+        config.sha256,
+        config.audio.chunk_seconds,
+    )
+    _validate_rows_match_plan(rows, plan)
     class_names = tuple(sorted(config.classes))
     by_class = {
         class_name: _count_summary(
@@ -103,6 +116,7 @@ def build_data_quality_report(
         validation_checks=(
             ValidationCheck("canonical_manifest_schema", True),
             ValidationCheck("preprocessing_configuration_matches", True),
+            ValidationCheck("rows_match_split_plan", True),
             ValidationCheck("all_image_files_exist", True),
             ValidationCheck("recording_groups_are_isolated", True),
             ValidationCheck("every_fold_contains_all_classes", True),
@@ -110,6 +124,59 @@ def build_data_quality_report(
         ),
         provenance_note=PROVENANCE_NOTE,
     )
+
+
+def _validate_rows_match_plan(
+    rows: Sequence[ManifestRow],
+    plan: SplitPlan,
+) -> None:
+    issues: list[ManifestIssue] = []
+    recording_ids = {row.recording_id for row in rows}
+    fold_recording_ids = set(plan.fold_by_recording)
+    split_recording_ids = set(plan.split_by_recording)
+    if fold_recording_ids != recording_ids or split_recording_ids != recording_ids:
+        issues.append(ManifestIssue(
+            "split_plan_recordings_mismatch",
+            "split plan recording IDs must exactly match the manifest rows",
+        ))
+
+    observed_folds = {row.fold for row in rows}
+    expected_folds = set(range(plan.folds))
+    if observed_folds != expected_folds:
+        issues.append(ManifestIssue(
+            "split_plan_fold_set_mismatch",
+            (
+                f"manifest folds {sorted(observed_folds)} do not match "
+                f"planned folds {sorted(expected_folds)}"
+            ),
+        ))
+
+    for row in rows:
+        if plan.fold_by_recording.get(row.recording_id) != row.fold:
+            issues.append(ManifestIssue(
+                "split_plan_fold_mismatch",
+                "row fold does not match the split plan",
+                row.example_id,
+            ))
+        expected_split = (
+            "test"
+            if row.fold == plan.test_fold
+            else "val"
+            if row.fold == plan.val_fold
+            else "train"
+        )
+        if (
+            plan.split_by_recording.get(row.recording_id) != row.split
+            or row.split != expected_split
+        ):
+            issues.append(ManifestIssue(
+                "split_plan_split_mismatch",
+                "row split does not match the split plan and selected folds",
+                row.example_id,
+            ))
+
+    if issues:
+        raise ManifestValidationError(issues)
 
 
 def serialize_report_json(report: DataQualityReport) -> bytes:

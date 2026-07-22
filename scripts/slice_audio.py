@@ -22,11 +22,11 @@ import argparse
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import librosa
 import matplotlib
-from frog_classifier.data import load_preprocessing_config
+from frog_classifier.data import PreprocessingConfig, load_preprocessing_config
 
 # Use a non-interactive backend so this can run on servers/CI without a display.
 matplotlib.use("Agg")
@@ -190,71 +190,77 @@ def _resolve_path(repo_root: Path, p: Path) -> Path:
     return p if p.is_absolute() else (repo_root / p)
 
 
-def main() -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    preprocessing = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
-
+def build_parser(
+    repo_root: Path,
+    preprocessing: PreprocessingConfig,
+) -> argparse.ArgumentParser:
     default_raw = repo_root / "raw" / "external"
     default_out = repo_root / "processed" / "external" / "spectrograms"
 
-    p = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description="Slice raw audio into fixed chunks and save Mel-spectrogram PNGs while preserving folder structure."
     )
-    p.add_argument(
+    parser.add_argument(
         "--raw-root",
         type=Path,
         default=default_raw,
         help='Input root containing nested audio files (default: "raw/external"). Example: --raw-root "raw/ponds"',
     )
-    p.add_argument(
+    parser.add_argument(
         "--out-root",
         type=Path,
         default=default_out,
         help='Output root for spectrogram PNGs (default: "processed/external/spectrograms").',
     )
-    p.add_argument(
+    parser.add_argument(
         "--out-subdir",
         type=str,
         default="",
         help='Optional subfolder under out-root (e.g. "review_batch" -> processed/external/spectrograms/review_batch).',
     )
-    p.add_argument(
+    parser.add_argument(
         "--sample-rate",
         type=int,
         default=preprocessing.audio.sample_rate_hz,
         help="Resample audio to this rate (Hz).",
     )
-    p.add_argument(
+    parser.add_argument(
         "--chunk-seconds",
         type=int,
         default=preprocessing.audio.chunk_seconds,
         help="Chunk length in seconds.",
     )
-    p.add_argument(
+    parser.add_argument(
         "--n-mels",
         type=int,
         default=preprocessing.spectrogram.n_mels,
         help="Number of Mel bins.",
     )
-    p.add_argument(
+    parser.add_argument(
         "--fmin",
         type=int,
         default=preprocessing.spectrogram.fmin_hz,
         help="Minimum frequency (Hz) for Mel-spectrogram.",
     )
-    p.add_argument(
+    parser.add_argument(
         "--fmax",
         type=int,
         default=preprocessing.spectrogram.fmax_hz,
         help="Maximum frequency (Hz) for Mel-spectrogram.",
     )
-    p.add_argument(
+    parser.add_argument(
         "--limit-files",
         type=int,
         default=0,
         help="Process only the first N audio files per pond (0 = no limit). Useful for quick demos.",
     )
-    args = p.parse_args()
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    repo_root = Path(__file__).resolve().parents[1]
+    preprocessing = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
+    args = build_parser(repo_root, preprocessing).parse_args(argv)
 
     cfg = Config(
         raw_root=_resolve_path(repo_root, args.raw_root),

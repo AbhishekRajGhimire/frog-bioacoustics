@@ -27,6 +27,8 @@ uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file 
 `scripts/slice_audio.py` recursively discovers `.wav` and `.mp3` recordings, preserves their relative folder structure, and writes one axis-free PNG for every complete five-second window.
 The configured contract uses 22,050 Hz mono audio, no overlap, 128 Mel bins, a 0 Hz to 8,000 Hz range, and drops the final partial window.
 The machine-readable configuration is [config/preprocessing.toml](../config/preprocessing.toml).
+The configuration loader rejects non-finite floating-point values before they can reach librosa or Matplotlib.
+The slicer passes the tracked power, FFT, hop length, figure dimensions, DPI, and interpolation values explicitly to those libraries.
 
 Process the default external recording root:
 
@@ -84,6 +86,7 @@ uv run python scripts/build_manifest.py
 ```
 
 The manifest includes its version, a stable example identifier, image and class metadata, recording identity, start time, fold, split, and preprocessing configuration SHA-256.
+Strict loading re-parses every image filename and requires its label directory, POSIX path, lowercase PNG suffix, example ID, recording ID, nonnegative start time, and configured chunk alignment to agree.
 The default plan uses five folds with test fold zero and validation fold one.
 Override the fold plan only when the resulting folds preserve both classes and recording isolation:
 
@@ -91,7 +94,10 @@ Override the fold plan only when the resulting folds preserve both classes and r
 uv run python scripts/build_manifest.py --folds 5 --test-fold 0 --val-fold 1 --seed 1337
 ```
 
+The default `labeled/manifest.csv` destination remains allowed.
+Custom manifest destinations must have a CSV suffix, and no output may target the selected configuration, a discovered label image, a canonical label source tree, or the repository raw, processed, or configuration trees.
 The command fails instead of writing partial output when the source labels, filename contract, class coverage, fold plan, or output destinations are invalid.
+The report builder independently validates every row and verifies its fold and split against the supplied split plan before emitting passed checks.
 
 ## Run the strict baseline
 
@@ -156,4 +162,4 @@ Write-Output 'Em-dash matches: 0'
 git status --short
 ```
 
-The verified acceptance run passed 66 tests with zero failures, compiled every operational script, and reported compatible locked dependencies.
+The verified acceptance run passed 79 tests with zero failures, compiled every operational script, and reported compatible locked dependencies.

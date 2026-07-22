@@ -60,9 +60,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     report_markdown = (report_dir / "manifest-report.md").resolve()
 
     try:
-        _validate_output_paths((out_csv, report_json, report_markdown))
         config = load_preprocessing_config(config_path)
         examples = discover_labeled_examples(training_root, repo_root, config)
+        _validate_output_paths(
+            out_csv=out_csv,
+            report_paths=(report_json, report_markdown),
+            repo_root=repo_root,
+            training_root=training_root,
+            config_path=config_path,
+            discovered_image_paths=tuple(
+                (repo_root / example.image_path).resolve()
+                for example in examples
+            ),
+        )
         plan = create_split_plan(
             examples,
             folds=args.folds,
@@ -76,6 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             repo_root,
             config.classes,
             config.sha256,
+            config.audio.chunk_seconds,
         )
         manifest_payload = serialize_manifest(rows)
         report = build_data_quality_report(
@@ -117,20 +128,83 @@ def _resolve(repo_root: Path, path: Path) -> Path:
     return path.resolve() if path.is_absolute() else (repo_root / path).resolve()
 
 
-def _validate_output_paths(paths: Sequence[Path]) -> None:
+def _validate_output_paths(
+    *,
+    out_csv: Path,
+    report_paths: Sequence[Path],
+    repo_root: Path,
+    training_root: Path,
+    config_path: Path,
+    discovered_image_paths: Sequence[Path],
+) -> None:
+    paths = (out_csv, *report_paths)
+    issues: list[ManifestIssue] = []
+    if out_csv.suffix.casefold() != ".csv":
+        issues.append(ManifestIssue(
+            "invalid_output_suffix",
+            "manifest destination must have a CSV suffix",
+            str(out_csv),
+        ))
+
     collisions = sorted(
         {path for path in paths if paths.count(path) > 1},
         key=str,
     )
-    if collisions:
-        raise ManifestValidationError(
-            ManifestIssue(
-                "output_path_collision",
-                "manifest CSV and report destinations must be pairwise distinct",
-                str(path),
-            )
-            for path in collisions
+    issues.extend(
+        ManifestIssue(
+            "output_path_collision",
+            "manifest CSV and report destinations must be pairwise distinct",
+            str(path),
         )
+        for path in collisions
+    )
+
+    repo_root = repo_root.resolve()
+    training_root = training_root.resolve()
+    default_training_root = (repo_root / "labeled").resolve()
+    default_manifest = (default_training_root / "manifest.csv").resolve()
+    protected_files = {
+        config_path.resolve(),
+        *(path.resolve() for path in discovered_image_paths),
+    }
+    protected_roots = (
+        (repo_root / "raw").resolve(),
+        (repo_root / "processed").resolve(),
+        (repo_root / "config").resolve(),
+        training_root,
+    )
+    for path in paths:
+        resolved_path = path.resolve()
+        allowed_default_manifest = (
+            resolved_path == out_csv.resolve() == default_manifest
+            and training_root == default_training_root
+        )
+        protected = resolved_path in protected_files or any(
+            _is_within(resolved_path, root)
+            for root in protected_roots
+        )
+        if protected and not allowed_default_manifest:
+            issues.append(
+                ManifestIssue(
+                    "protected_output_path",
+                    (
+                        "output destination must not replace configuration, raw, "
+                        "processed, or labeled source data"
+                    ),
+                    str(resolved_path),
+                )
+            )
+
+    if issues:
+        raise ManifestValidationError(issues)
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
 
 
 if __name__ == "__main__":

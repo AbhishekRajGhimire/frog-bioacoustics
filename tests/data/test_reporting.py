@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from dataclasses import FrozenInstanceError, asdict
+from dataclasses import FrozenInstanceError, asdict, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import cast
@@ -17,7 +17,8 @@ from frog_classifier.data.reporting import (
     write_output_bundle,
 )
 from frog_classifier.data.splitting import SplitPlan
-from tests.data.helpers import load_test_config
+from frog_classifier.data.validation import ManifestValidationError
+from tests.data.helpers import load_test_config, write_png
 
 
 class DataQualityReportTests(unittest.TestCase):
@@ -27,6 +28,8 @@ class DataQualityReportTests(unittest.TestCase):
         self.repo_root = Path(temporary_directory.name)
         self.config = load_test_config(self.repo_root)
         self.rows = self._rows(self.config.sha256)
+        for row in self.rows:
+            write_png(self.repo_root, row.image_path)
         self.manifest_payload = serialize_manifest(self.rows)
         fold_by_recording = {
             row.recording_id: row.fold
@@ -117,6 +120,7 @@ class DataQualityReportTests(unittest.TestCase):
             [
                 "canonical_manifest_schema",
                 "preprocessing_configuration_matches",
+                "rows_match_split_plan",
                 "all_image_files_exist",
                 "recording_groups_are_isolated",
                 "every_fold_contains_all_classes",
@@ -156,10 +160,67 @@ class DataQualityReportTests(unittest.TestCase):
         self.assertIn(self.config.sha256.encode(), first_markdown)
         self.assertIn(PROVENANCE_NOTE.encode(), first_markdown)
 
-    def _report(self):
-        return build_data_quality_report(
-            self.rows,
+    def test_rejects_invalid_rows_instead_of_reporting_passed_checks(self) -> None:
+        invalid_rows = list(self.rows)
+        invalid_rows[0] = replace(
+            invalid_rows[0],
+            image_path=(
+                f"labeled/{invalid_rows[0].label_name}/missing/"
+                f"{invalid_rows[0].example_id}.png"
+            ),
+        )
+
+        with self.assertRaises(ManifestValidationError) as raised:
+            self._report(rows=tuple(invalid_rows))
+
+        self.assertIn(
+            "missing_image_file",
+            [issue.code for issue in raised.exception.issues],
+        )
+
+    def test_rejects_rows_that_disagree_with_plan_folds(self) -> None:
+        row = self.rows[0]
+        fold_by_recording = dict(self.plan.fold_by_recording)
+        fold_by_recording[row.recording_id] = (row.fold + 1) % self.plan.folds
+        invalid_plan = replace(
             self.plan,
+            fold_by_recording=MappingProxyType(fold_by_recording),
+        )
+
+        with self.assertRaises(ManifestValidationError) as raised:
+            self._report(plan=invalid_plan)
+
+        self.assertIn(
+            "split_plan_fold_mismatch",
+            [issue.code for issue in raised.exception.issues],
+        )
+
+    def test_rejects_rows_that_disagree_with_plan_splits(self) -> None:
+        row = self.rows[0]
+        split_by_recording = dict(self.plan.split_by_recording)
+        split_by_recording[row.recording_id] = "train"
+        invalid_plan = replace(
+            self.plan,
+            split_by_recording=MappingProxyType(split_by_recording),
+        )
+
+        with self.assertRaises(ManifestValidationError) as raised:
+            self._report(plan=invalid_plan)
+
+        self.assertIn(
+            "split_plan_split_mismatch",
+            [issue.code for issue in raised.exception.issues],
+        )
+
+    def _report(
+        self,
+        *,
+        rows: tuple[ManifestRow, ...] | None = None,
+        plan: SplitPlan | None = None,
+    ):
+        return build_data_quality_report(
+            self.rows if rows is None else rows,
+            self.plan if plan is None else plan,
             self.config,
             self.manifest_payload,
             self.repo_root,
@@ -182,7 +243,7 @@ class DataQualityReportTests(unittest.TestCase):
                     rows.append(ManifestRow(
                         manifest_version=1,
                         example_id=example_id,
-                        image_path=f"images/{example_id}.png",
+                        image_path=f"labeled/{label_name}/{example_id}.png",
                         label=label,
                         label_name=label_name,
                         recording_id=recording_id,
