@@ -66,7 +66,12 @@ def main() -> int:
         raise FileNotFoundError(f"manifest not found: {manifest}")
 
     config = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
-    rows = load_manifest(manifest, repo_root, config)
+    rows = load_manifest(
+        manifest,
+        repo_root,
+        config,
+        label_root=repo_root / "labeled",
+    )
     examples = [
         Example(repo_root / Path(row.image_path), row.label, row.split)
         for row in rows

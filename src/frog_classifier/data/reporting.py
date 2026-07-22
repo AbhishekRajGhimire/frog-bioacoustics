@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
 from .config import PreprocessingConfig
-from .manifest import ManifestRow
+from .manifest import ManifestRow, serialize_manifest
 from .splitting import SplitPlan
 from .validation import (
     ManifestIssue,
@@ -69,6 +69,8 @@ def build_data_quality_report(
     config: PreprocessingConfig,
     manifest_payload: bytes,
     repo_root: Path,
+    *,
+    label_root: Path,
 ) -> DataQualityReport:
     validate_manifest_rows(
         rows,
@@ -76,7 +78,17 @@ def build_data_quality_report(
         config.classes,
         config.sha256,
         config.audio.chunk_seconds,
+        label_root=label_root,
     )
+    canonical_manifest_payload = serialize_manifest(rows)
+    if manifest_payload != canonical_manifest_payload:
+        raise ManifestValidationError((ManifestIssue(
+            "manifest_payload_mismatch",
+            (
+                "manifest payload must equal the canonical serialization of "
+                "the validated rows"
+            ),
+        ),))
     _validate_rows_match_plan(rows, plan)
     class_names = tuple(sorted(config.classes))
     by_class = {
@@ -108,7 +120,7 @@ def build_data_quality_report(
         val_fold=plan.val_fold,
         preprocessing_config_path=_display_path(config.source_path, repo_root),
         preprocessing_config_sha256=config.sha256,
-        manifest_sha256=hashlib.sha256(manifest_payload).hexdigest(),
+        manifest_sha256=hashlib.sha256(canonical_manifest_payload).hexdigest(),
         total=_count_summary(rows),
         by_class=by_class,
         by_fold=by_fold,

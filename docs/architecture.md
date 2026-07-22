@@ -53,15 +53,17 @@ The filename parser derives each recording ID and window start time from the sel
 Each row includes `manifest_version`, `example_id`, `image_path`, class metadata, `recording_id`, `start_s`, `fold`, `split`, and `preprocessing_config_sha256`.
 All examples from one recording ID receive one fold and one split, preventing recording-level leakage.
 The default command uses five folds with fold zero for test data and fold one for validation data.
-The validator re-parses each filename and requires canonical POSIX paths, lowercase PNG suffixes, label directories, example IDs, recording IDs, nonnegative aligned start times, and configured class metadata to agree.
+The validator treats the selected label root as authoritative and requires the first path component beneath it to match the row class.
+It re-parses each filename and requires canonical POSIX paths without dot or parent aliases, lowercase PNG suffixes, example IDs, recording IDs, nonnegative aligned start times, and configured class metadata to agree.
 It also rejects invalid schemas, missing classes, duplicate identities, missing files, split leakage, and folds or splits that lack either class.
-Output safety permits the default `labeled/manifest.csv` artifact but rejects custom destinations that collide with inputs or fall inside raw, processed, configuration, or canonical label source trees.
+Output safety permits only the lexical, non-symlinked default `labeled/manifest.csv` artifact inside the canonical label tree.
+It rejects resolved destination aliases that collide with inputs or fall inside raw, processed, configuration, or selected label source trees.
 
 ## Data-quality reports
 
 The manifest command writes JSON and Markdown reports to `results/data_quality/` beside the manifest output.
 Each report records manifest and report versions, the fold plan, configuration and manifest checksums, class and recording-group counts, split and fold counts, and validation checks.
-The public report builder validates rows and their exact fold and split agreement with the supplied plan before producing those checks.
+The public report builder validates rows, requires the supplied manifest payload to equal their canonical serialization, and verifies exact fold and split agreement with the supplied plan before producing those checks.
 The reports make every training and evaluation input inspectable without tracking generated artifacts.
 
 ## Strict baseline

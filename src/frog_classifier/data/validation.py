@@ -40,6 +40,8 @@ def validate_manifest_rows(
     classes: Mapping[str, int],
     config_sha256: str,
     chunk_seconds: int,
+    *,
+    label_root: Path,
     require_files: bool = True,
 ) -> None:
     issues: list[ManifestIssue] = []
@@ -54,6 +56,16 @@ def validate_manifest_rows(
     labels_by_split: dict[str, set[int]] = defaultdict(set)
     observed_folds: set[int] = set()
     repo_root = repo_root.resolve()
+    label_root = label_root.resolve()
+    try:
+        label_root_relative = label_root.relative_to(repo_root)
+    except ValueError:
+        raise ManifestValidationError((ManifestIssue(
+            "invalid_label_root",
+            "label root must be inside the repository root",
+            str(label_root),
+        ),))
+    label_root_parts = PurePosixPath(label_root_relative.as_posix()).parts
 
     for row in rows:
         if type(row.manifest_version) is not int or row.manifest_version != 1:
@@ -104,6 +116,10 @@ def validate_manifest_rows(
             and "\\" not in row.image_path
             and row.image_path == canonical_posix_path
             and not posix_path.is_absolute()
+            and not any(
+                part in {".", ".."}
+                for part in row.image_path.split("/")
+            )
         )
         if not canonical_path:
             issues.append(ManifestIssue(
@@ -112,15 +128,16 @@ def validate_manifest_rows(
                 row.image_path,
             ))
 
-        label_directories = tuple(
-            part
-            for part in posix_path.parts[:-1]
-            if part in classes
-        )
-        if label_directories != (row.label_name,):
+        path_parts = posix_path.parts
+        relative_parts = path_parts[len(label_root_parts):]
+        if (
+            path_parts[:len(label_root_parts)] != label_root_parts
+            or len(relative_parts) < 2
+            or relative_parts[0] != row.label_name
+        ):
             issues.append(ManifestIssue(
                 "image_label_directory_mismatch",
-                "image path must contain exactly its canonical label directory",
+                "the first path component below the label root must match the row label",
                 row.image_path,
             ))
 

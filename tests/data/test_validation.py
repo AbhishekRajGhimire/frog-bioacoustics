@@ -179,6 +179,7 @@ class ValidateManifestRowsTests(unittest.TestCase):
             CLASSES,
             CONFIG_SHA256,
             5,
+            label_root=self.repo_root / "labeled",
         )
 
     def _replace(self, index: int, row: ManifestRow) -> tuple[ManifestRow, ...]:

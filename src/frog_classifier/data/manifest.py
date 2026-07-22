@@ -80,6 +80,8 @@ def load_manifest(
     path: Path,
     repo_root: Path,
     config: PreprocessingConfig,
+    *,
+    label_root: Path,
 ) -> tuple[ManifestRow, ...]:
     rows: list[ManifestRow] = []
     issues: list[ManifestIssue] = []
@@ -139,6 +141,7 @@ def load_manifest(
         config.classes,
         config.sha256,
         config.audio.chunk_seconds,
+        label_root=label_root,
     )
     return loaded_rows
 

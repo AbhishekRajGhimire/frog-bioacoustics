@@ -92,7 +92,7 @@ Ensure every reported metric is based on valid, leakage-safe data containing bot
 
 Verified on July 22, 2026:
 
-- The complete repository suite passed 79 tests with zero failures.
+- The complete repository suite passed 83 tests with zero failures.
 - The real manifest contains 61 examples from 60 recording groups: 13 `litoria_aurea` examples from 13 groups and 48 `non_target` examples from 47 groups.
 - Fold class counts for `litoria_aurea` and `non_target` examples are fold 0: 3 and 10, fold 1: 3 and 9, fold 2: 2 and 10, fold 3: 2 and 10, and fold 4: 3 and 9.
 - Split class counts for `litoria_aurea` and `non_target` examples are train: 7 and 29, validation: 3 and 9, and test: 3 and 10.

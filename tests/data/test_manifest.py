@@ -177,9 +177,42 @@ class ManifestCsvTests(unittest.TestCase):
         manifest_path = self.repo_root / "manifest.csv"
         manifest_path.write_bytes(serialize_manifest(tuple(reversed(self.rows))))
 
-        loaded = load_manifest(manifest_path, self.repo_root, self.config)
+        loaded = load_manifest(
+            manifest_path,
+            self.repo_root,
+            self.config,
+            label_root=self.repo_root / "labeled",
+        )
 
         self.assertEqual(loaded, tuple(sorted(self.rows, key=lambda row: row.image_path)))
+
+    def test_loads_nested_directories_named_like_canonical_classes(self) -> None:
+        nested_rows = tuple(
+            replace(
+                row,
+                image_path=(
+                    f"labeled/{row.label_name}/site/litoria_aurea/non_target/"
+                    f"{row.example_id}.png"
+                ),
+            )
+            for row in self.rows
+        )
+        for row in nested_rows:
+            write_png(self.repo_root, row.image_path)
+        manifest_path = self.repo_root / "nested.csv"
+        manifest_path.write_bytes(serialize_manifest(nested_rows))
+
+        loaded = load_manifest(
+            manifest_path,
+            self.repo_root,
+            self.config,
+            label_root=self.repo_root / "labeled",
+        )
+
+        self.assertEqual(
+            loaded,
+            tuple(sorted(nested_rows, key=lambda row: row.image_path)),
+        )
 
     def test_rejects_missing_or_extra_columns(self) -> None:
         for columns in (MANIFEST_COLUMNS[:-1], MANIFEST_COLUMNS + ("extra",)):
@@ -187,7 +220,12 @@ class ManifestCsvTests(unittest.TestCase):
                 manifest_path = self._write_csv(columns, ())
 
                 with self.assertRaises(ManifestValidationError) as raised:
-                    load_manifest(manifest_path, self.repo_root, self.config)
+                    load_manifest(
+                        manifest_path,
+                        self.repo_root,
+                        self.config,
+                        label_root=self.repo_root / "labeled",
+                    )
 
                 self.assertEqual(
                     [issue.code for issue in raised.exception.issues],
@@ -201,7 +239,12 @@ class ManifestCsvTests(unittest.TestCase):
         manifest_path = self._write_csv(MANIFEST_COLUMNS, records)
 
         with self.assertRaises(ManifestValidationError) as raised:
-            load_manifest(manifest_path, self.repo_root, self.config)
+            load_manifest(
+                manifest_path,
+                self.repo_root,
+                self.config,
+                label_root=self.repo_root / "labeled",
+            )
 
         self.assertEqual(
             [issue.code for issue in raised.exception.issues],
@@ -224,7 +267,12 @@ class ManifestCsvTests(unittest.TestCase):
                 )
 
                 with self.assertRaises(ManifestValidationError) as raised:
-                    load_manifest(manifest_path, self.repo_root, self.config)
+                    load_manifest(
+                        manifest_path,
+                        self.repo_root,
+                        self.config,
+                        label_root=self.repo_root / "labeled",
+                    )
 
                 self.assertIn(
                     "invalid_manifest_row",
@@ -247,7 +295,12 @@ class ManifestCsvTests(unittest.TestCase):
                 manifest_path.write_bytes(serialize_manifest(all_rows))
 
                 with self.assertRaises(ManifestValidationError) as raised:
-                    load_manifest(manifest_path, self.repo_root, self.config)
+                    load_manifest(
+                        manifest_path,
+                        self.repo_root,
+                        self.config,
+                        label_root=self.repo_root / "labeled",
+                    )
 
                 self.assertIn(
                     expected_code,
@@ -336,6 +389,27 @@ class ManifestCsvTests(unittest.TestCase):
             with self.subTest(row=invalid):
                 self._assert_rejected_row(invalid, "manifest_identity_mismatch")
 
+    def test_rejects_dot_and_parent_path_aliases(self) -> None:
+        canonical = self.rows[0]
+        aliases = (
+            replace(
+                canonical,
+                image_path=(
+                    f"labeled/./{canonical.label_name}/{canonical.example_id}.png"
+                ),
+            ),
+            replace(
+                canonical,
+                image_path=(
+                    f"labeled/{canonical.label_name}/temporary/../"
+                    f"{canonical.example_id}.png"
+                ),
+            ),
+        )
+        for invalid in aliases:
+            with self.subTest(image_path=invalid.image_path):
+                self._assert_rejected_row(invalid, "invalid_image_path")
+
     def _assert_rejected_row(
         self,
         row: ManifestRow,
@@ -348,7 +422,12 @@ class ManifestCsvTests(unittest.TestCase):
         manifest_path.write_bytes(serialize_manifest((row,) + self.rows[1:]))
 
         with self.assertRaises(ManifestValidationError) as raised:
-            load_manifest(manifest_path, self.repo_root, self.config)
+            load_manifest(
+                manifest_path,
+                self.repo_root,
+                self.config,
+                label_root=self.repo_root / "labeled",
+            )
 
         self.assertIn(
             expected_code,

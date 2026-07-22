@@ -86,7 +86,8 @@ uv run python scripts/build_manifest.py
 ```
 
 The manifest includes its version, a stable example identifier, image and class metadata, recording identity, start time, fold, split, and preprocessing configuration SHA-256.
-Strict loading re-parses every image filename and requires its label directory, POSIX path, lowercase PNG suffix, example ID, recording ID, nonnegative start time, and configured chunk alignment to agree.
+Strict loading treats the selected label root as authoritative and requires the first path component beneath it to match the row class.
+It re-parses every image filename and requires a canonical POSIX path without dot or parent aliases, lowercase PNG suffix, example ID, recording ID, nonnegative start time, and configured chunk alignment to agree.
 The default plan uses five folds with test fold zero and validation fold one.
 Override the fold plan only when the resulting folds preserve both classes and recording isolation:
 
@@ -94,10 +95,10 @@ Override the fold plan only when the resulting folds preserve both classes and r
 uv run python scripts/build_manifest.py --folds 5 --test-fold 0 --val-fold 1 --seed 1337
 ```
 
-The default `labeled/manifest.csv` destination remains allowed.
+Only the lexical, non-symlinked default `labeled/manifest.csv` destination remains allowed inside the selected label tree.
 Custom manifest destinations must have a CSV suffix, and no output may target the selected configuration, a discovered label image, a canonical label source tree, or the repository raw, processed, or configuration trees.
 The command fails instead of writing partial output when the source labels, filename contract, class coverage, fold plan, or output destinations are invalid.
-The report builder independently validates every row and verifies its fold and split against the supplied split plan before emitting passed checks.
+The report builder independently validates every row, requires the supplied manifest bytes to match their canonical serialization, and verifies each fold and split against the supplied split plan before emitting passed checks.
 
 ## Run the strict baseline
 
@@ -162,4 +163,4 @@ Write-Output 'Em-dash matches: 0'
 git status --short
 ```
 
-The verified acceptance run passed 79 tests with zero failures, compiled every operational script, and reported compatible locked dependencies.
+The verified acceptance run passed 83 tests with zero failures, compiled every operational script, and reported compatible locked dependencies.

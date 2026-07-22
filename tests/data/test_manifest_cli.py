@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 from frog_classifier.data.validation import ManifestValidationError
@@ -252,6 +254,7 @@ class OutputPathValidationTests(unittest.TestCase):
                 with self.assertRaises(ManifestValidationError) as raised:
                     self.module._validate_output_paths(
                         out_csv=out_csv.resolve(),
+                        out_csv_lexical=out_csv.absolute(),
                         report_paths=(
                             report_json.resolve(),
                             self.report_markdown,
@@ -270,12 +273,45 @@ class OutputPathValidationTests(unittest.TestCase):
     def test_allows_the_default_manifest_inside_the_canonical_label_tree(self) -> None:
         self.assertIsNone(self.module._validate_output_paths(
             out_csv=(self.repo_root / "labeled" / "manifest.csv").resolve(),
+            out_csv_lexical=(
+                self.repo_root / "labeled" / "manifest.csv"
+            ).absolute(),
             report_paths=(self.report_json, self.report_markdown),
             repo_root=self.repo_root,
             training_root=self.training_root,
             config_path=self.config_path,
             discovered_image_paths=(),
         ))
+
+    def test_symlinked_default_manifest_cannot_replace_protected_target(self) -> None:
+        self.config_path.parent.mkdir(parents=True)
+        self.config_path.write_bytes(VALID_CONFIG)
+        for fold_group in range(5):
+            for label_name in ("litoria_aurea", "non_target"):
+                recording_id = f"{label_name}_{fold_group}"
+                write_png(
+                    self.training_root,
+                    f"{label_name}/{recording_id}_start0s.png",
+                )
+        protected_target = self.repo_root / "external" / "protected.csv"
+        protected_target.parent.mkdir(parents=True)
+        protected_target.write_bytes(b"protected source")
+        default_manifest = self.training_root / "manifest.csv"
+        try:
+            default_manifest.symlink_to(protected_target)
+        except (NotImplementedError, OSError) as error:
+            self.skipTest(f"file symlink creation unavailable: {error}")
+
+        self.module.__file__ = str(
+            self.repo_root / "scripts" / "build_manifest.py"
+        )
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = self.module.main(())
+
+        self.assertEqual(result, 2)
+        self.assertIn("protected_output_path", stderr.getvalue())
+        self.assertEqual(protected_target.read_bytes(), b"protected source")
 
     def _load_script_module(self):
         specification = importlib.util.spec_from_file_location(

@@ -53,7 +53,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     repo_root = Path(__file__).resolve().parents[1]
     args = build_parser().parse_args(argv)
     training_root = _resolve(repo_root, args.training_root)
-    out_csv = _resolve(repo_root, args.out_csv)
+    out_csv_lexical = _absolute(repo_root, args.out_csv)
+    out_csv = out_csv_lexical.resolve()
     report_dir = _resolve(repo_root, args.report_dir)
     config_path = _resolve(repo_root, args.config)
     report_json = (report_dir / "manifest-report.json").resolve()
@@ -64,6 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         examples = discover_labeled_examples(training_root, repo_root, config)
         _validate_output_paths(
             out_csv=out_csv,
+            out_csv_lexical=out_csv_lexical,
             report_paths=(report_json, report_markdown),
             repo_root=repo_root,
             training_root=training_root,
@@ -87,6 +89,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config.classes,
             config.sha256,
             config.audio.chunk_seconds,
+            label_root=training_root,
         )
         manifest_payload = serialize_manifest(rows)
         report = build_data_quality_report(
@@ -95,6 +98,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config,
             manifest_payload,
             repo_root,
+            label_root=training_root,
         )
         write_output_bundle({
             out_csv: manifest_payload,
@@ -128,9 +132,14 @@ def _resolve(repo_root: Path, path: Path) -> Path:
     return path.resolve() if path.is_absolute() else (repo_root / path).resolve()
 
 
+def _absolute(repo_root: Path, path: Path) -> Path:
+    return path.absolute() if path.is_absolute() else (repo_root / path).absolute()
+
+
 def _validate_output_paths(
     *,
     out_csv: Path,
+    out_csv_lexical: Path,
     report_paths: Sequence[Path],
     repo_root: Path,
     training_root: Path,
@@ -139,11 +148,11 @@ def _validate_output_paths(
 ) -> None:
     paths = (out_csv, *report_paths)
     issues: list[ManifestIssue] = []
-    if out_csv.suffix.casefold() != ".csv":
+    if out_csv_lexical.suffix.casefold() != ".csv":
         issues.append(ManifestIssue(
             "invalid_output_suffix",
             "manifest destination must have a CSV suffix",
-            str(out_csv),
+            str(out_csv_lexical),
         ))
 
     collisions = sorted(
@@ -162,7 +171,10 @@ def _validate_output_paths(
     repo_root = repo_root.resolve()
     training_root = training_root.resolve()
     default_training_root = (repo_root / "labeled").resolve()
-    default_manifest = (default_training_root / "manifest.csv").resolve()
+    default_manifest_lexical = _absolute(
+        repo_root,
+        Path("labeled/manifest.csv"),
+    )
     protected_files = {
         config_path.resolve(),
         *(path.resolve() for path in discovered_image_paths),
@@ -176,14 +188,25 @@ def _validate_output_paths(
     for path in paths:
         resolved_path = path.resolve()
         allowed_default_manifest = (
-            resolved_path == out_csv.resolve() == default_manifest
+            resolved_path == out_csv.resolve() == default_manifest_lexical
+            and out_csv_lexical == default_manifest_lexical
             and training_root == default_training_root
         )
-        protected = resolved_path in protected_files or any(
+        symlinked_default_manifest = (
+            path == out_csv
+            and out_csv_lexical == default_manifest_lexical
+            and resolved_path != default_manifest_lexical
+        )
+        protected_file = resolved_path in protected_files
+        protected_root = any(
             _is_within(resolved_path, root)
             for root in protected_roots
         )
-        if protected and not allowed_default_manifest:
+        if (
+            symlinked_default_manifest
+            or protected_file
+            or (protected_root and not allowed_default_manifest)
+        ):
             issues.append(
                 ManifestIssue(
                     "protected_output_path",

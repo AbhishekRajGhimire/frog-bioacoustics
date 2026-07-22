@@ -212,18 +212,33 @@ class DataQualityReportTests(unittest.TestCase):
             [issue.code for issue in raised.exception.issues],
         )
 
+    def test_rejects_manifest_payload_that_does_not_match_rows(self) -> None:
+        with self.assertRaises(ManifestValidationError) as raised:
+            self._report(manifest_payload=b"not the canonical manifest")
+
+        self.assertIn(
+            "manifest_payload_mismatch",
+            [issue.code for issue in raised.exception.issues],
+        )
+
     def _report(
         self,
         *,
         rows: tuple[ManifestRow, ...] | None = None,
         plan: SplitPlan | None = None,
+        manifest_payload: bytes | None = None,
     ):
         return build_data_quality_report(
             self.rows if rows is None else rows,
             self.plan if plan is None else plan,
             self.config,
-            self.manifest_payload,
+            (
+                self.manifest_payload
+                if manifest_payload is None
+                else manifest_payload
+            ),
             self.repo_root,
+            label_root=self.repo_root / "labeled",
         )
 
     @staticmethod
