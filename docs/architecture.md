@@ -57,7 +57,7 @@ It loads the whole file as mono audio at the configured rate, computes the Mel p
 Each complete five-second chunk is then converted from its own samples, the floor is subtracted per band, and decibels from `db_floor` to `db_ceiling` map linearly to grey levels 0 to 255 with clipping outside that range.
 Rows are flipped so the lowest band is the bottom row, and the array is written as a lossless 8-bit grayscale PNG with no metadata, so identical audio always yields identical bytes.
 Under the current contract every image is 216 pixels wide and 128 pixels tall.
-The labelers show these images through the viridis colour map for readability; storage stays grayscale.
+The labeler shows these images through the viridis colour map for readability; storage stays grayscale.
 
 ## Regeneration and verification
 
