@@ -29,6 +29,18 @@ def silence(seconds: float, *, sample_rate_hz: int = SAMPLE_RATE_HZ) -> np.ndarr
     return np.zeros(int(round(seconds * sample_rate_hz)), dtype=np.float32)
 
 
+def noise(
+    seconds: float,
+    *,
+    amplitude: float = 0.1,
+    seed: int = 0,
+    sample_rate_hz: int = SAMPLE_RATE_HZ,
+) -> np.ndarray:
+    """Seeded white noise so synthetic recordings have a realistic floor in every band."""
+    samples = int(round(seconds * sample_rate_hz))
+    return np.random.default_rng(seed).normal(0.0, amplitude, samples).astype(np.float32)
+
+
 def write_wav(
     path: Path,
     waveform: np.ndarray,

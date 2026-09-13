@@ -14,6 +14,7 @@ from frog_classifier.preprocessing.spectrogram import (
 from tests.preprocessing.helpers import (
     SAMPLE_RATE_HZ,
     mel_band_for,
+    noise,
     silence,
     tone,
 )
@@ -94,18 +95,22 @@ class ChunkImageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "band"):
             chunk_image(np.zeros((2, 2)), np.zeros(3), db_floor=0.0, db_ceiling=30.0)
 
-    def test_stationary_tone_renders_near_black(self) -> None:
-        recording = tone(1000.0, 30)
+    def test_stationary_tone_renders_near_black_in_its_band(self) -> None:
+        # Seeded noise gives every band a realistic floor. A pure tone over
+        # digital silence would leave the other bands at the numerical floor,
+        # where any leakage saturates.
+        recording = tone(1000.0, 30) + noise(30)
         floor = noise_floor(mel_decibels(recording, **MEL_SETTINGS), 50)
         chunk = mel_decibels(recording[: 5 * SAMPLE_RATE_HZ], **MEL_SETTINGS)
 
         image = chunk_image(chunk, floor, db_floor=0.0, db_ceiling=30.0)
 
+        tone_row = 127 - mel_band_for(1000.0)
         # One decibel above the floor is about 8 grey levels.
-        self.assertLessEqual(int(image.max()), 8)
+        self.assertLessEqual(int(image[tone_row].max()), 8)
 
     def test_transient_tone_renders_bright_in_its_band_only(self) -> None:
-        recording = np.concatenate([silence(5), tone(1000.0, 5), silence(5)])
+        recording = np.concatenate([silence(5), tone(1000.0, 5), silence(5)]) + noise(15)
         floor = noise_floor(mel_decibels(recording, **MEL_SETTINGS), 50)
         chunk_size = 5 * SAMPLE_RATE_HZ
         quiet = chunk_image(
@@ -121,11 +126,15 @@ class ChunkImageTests(unittest.TestCase):
             db_ceiling=30.0,
         )
 
-        self.assertEqual(int(quiet.max()), 0)
-        self.assertEqual(int(loud.max()), 255)
-        brightest_row = int(np.argmax(loud.max(axis=1)))
-        expected_row = 127 - mel_band_for(1000.0)
-        self.assertLessEqual(abs(brightest_row - expected_row), 2)
+        tone_row = 127 - mel_band_for(1000.0)
+        self.assertLess(int(quiet[tone_row].max()), 128)
+        self.assertEqual(int(loud[tone_row].max()), 255)
+        saturated_rows = np.flatnonzero(loud.max(axis=1) == 255).tolist()
+        self.assertIn(tone_row, saturated_rows)
+        self.assertTrue(
+            all(abs(row - tone_row) <= 2 for row in saturated_rows),
+            saturated_rows,
+        )
 
 
 class PngTests(unittest.TestCase):
