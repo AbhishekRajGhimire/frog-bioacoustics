@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 
 import streamlit as st
-from frog_classifier.preprocessing import colorize
+from frog_classifier.preprocessing.display import colorize
 
 import label_spectrograms as core
 

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -83,6 +84,18 @@ class SyncLabeledImagesTests(unittest.TestCase):
         self.assertEqual(self.labeled.read_bytes(), b"old")
         self.assertEqual(duplicate.read_bytes(), b"other")
         self.assertTrue(self.fresh.exists())
+
+    def test_stops_partway_on_replace_failure_and_reports_recovery(self) -> None:
+        labeled2 = self._write(self.labeled_root / "non_target" / "rec2_start5s.png", b"old2")
+        fresh2 = self._write(self.spectrogram_root / "site" / "rec2_start5s.png", b"new2")
+
+        with patch.object(self.module.os, "replace", side_effect=[None, OSError("locked")]):
+            result, output = self._run()
+
+        self.assertEqual(result, 2)
+        self.assertIn("Sync stopped after 1 of 2", output)
+        self.assertIn("Run scripts/slice_audio.py", output)
+        self.assertNotIn("Traceback", output)
 
     def test_nested_roots_are_rejected(self) -> None:
         result, output = self._run(

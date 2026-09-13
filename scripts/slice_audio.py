@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 slice_audio.py
 
@@ -15,8 +13,11 @@ Output naming: <stem>_start<N>s.png, where N is the window start in seconds.
 Existing images with the same name are overwritten. Nothing is deleted.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -98,13 +99,23 @@ def build_parser(repo_root: Path) -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    config = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
+def main(argv: Sequence[str] | None = None, *, repo_root: Path | None = None) -> int:
+    repo_root = repo_root if repo_root is not None else Path(__file__).resolve().parents[1]
     args = build_parser(repo_root).parse_args(argv)
+    config = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
 
     raw_root = _resolve_path(repo_root, args.raw_root)
     out_root = _resolve_path(repo_root, args.out_root) / (args.out_subdir or "")
+    labeled_root = repo_root / "labeled"
+    if _is_within(out_root, labeled_root):
+        print(f"out_root must not lie inside {labeled_root}: {out_root}", file=sys.stderr)
+        return 2
+    if _is_within(out_root, raw_root):
+        print(f"out_root must not lie inside raw_root {raw_root}: {out_root}", file=sys.stderr)
+        return 2
+    if _is_within(raw_root, out_root):
+        print(f"raw_root must not lie inside out_root {out_root}: {raw_root}", file=sys.stderr)
+        return 2
     if not raw_root.exists():
         raise FileNotFoundError(f"raw_root not found: {raw_root}")
 
@@ -135,6 +146,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _resolve_path(repo_root: Path, path: Path) -> Path:
     return path if path.is_absolute() else repo_root / path
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 if __name__ == "__main__":

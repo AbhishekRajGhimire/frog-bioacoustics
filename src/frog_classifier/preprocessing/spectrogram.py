@@ -53,6 +53,8 @@ def chunk_image(
     db_ceiling: float,
 ) -> np.ndarray:
     """8-bit image of decibels above the floor with the lowest band at the bottom."""
+    if mel_db.ndim != 2:
+        raise ValueError("mel_db must have shape (bands, frames)")
     if db_ceiling <= db_floor:
         raise ValueError("db_ceiling must exceed db_floor")
     if floor.shape != (mel_db.shape[0],):

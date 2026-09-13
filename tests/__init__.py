@@ -5,4 +5,8 @@ import warnings
 # silently, so third-party import noise never appears in test output.
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", DeprecationWarning)
-    import audioread.rawread  # noqa: F401
+    try:
+        # audioread's rawread backend is optional; its absence must not break tests.
+        import audioread.rawread  # noqa: F401
+    except ImportError:
+        pass

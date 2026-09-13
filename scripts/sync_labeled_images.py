@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 sync_labeled_images.py
 
@@ -10,7 +8,13 @@ no longer contains a labeled example.
 
 All checks run before any file is touched. Any issue aborts the command
 with every issue listed and nothing changed.
+
+If a replacement fails partway through, for example because a labeler still
+holds an image open, the command reports how many replacements completed
+and which pair failed instead of raising.
 """
+
+from __future__ import annotations
 
 import argparse
 import os
@@ -31,6 +35,16 @@ from frog_classifier.data import (
 class SyncPlan:
     replacements: tuple[tuple[Path, Path], ...]
     issues: tuple[str, ...]
+
+
+class SyncError(RuntimeError):
+    """Raised when apply_sync stops partway through its replacements."""
+
+    def __init__(self, *, replaced: int, failed: tuple[Path, Path], error: OSError) -> None:
+        super().__init__(f"sync stopped after {replaced} replacement(s): {error}")
+        self.replaced = replaced
+        self.failed = failed
+        self.error = error
 
 
 def plan_sync(
@@ -95,9 +109,14 @@ def plan_sync(
 
 def apply_sync(plan: SyncPlan) -> int:
     """Move each fresh image over its labeled counterpart. Returns the count moved."""
+    replaced = 0
     for fresh, labeled in plan.replacements:
-        os.replace(fresh, labeled)
-    return len(plan.replacements)
+        try:
+            os.replace(fresh, labeled)
+        except OSError as error:
+            raise SyncError(replaced=replaced, failed=(fresh, labeled), error=error) from error
+        replaced += 1
+    return replaced
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -131,7 +150,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.dry_run:
         print(f"Dry run: {len(plan.replacements)} labeled image(s) would be replaced")
         return 0
-    replaced = apply_sync(plan)
+    total = len(plan.replacements)
+    try:
+        replaced = apply_sync(plan)
+    except SyncError as error:
+        _, labeled = error.failed
+        print(
+            f"Sync stopped after {error.replaced} of {total} replacement(s); "
+            f"failed on {labeled}: {error.error}",
+            file=sys.stderr,
+        )
+        print(
+            "Run scripts/slice_audio.py to recreate the consumed queue copies, "
+            "then run this command again.",
+            file=sys.stderr,
+        )
+        return 2
     print(f"Replaced {replaced} labeled image(s) from {args.spectrogram_root}")
     return 0
 

@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from frog_classifier.preprocessing.spectrogram import decode_png
+from tests.data.helpers import load_test_config
 from tests.preprocessing.helpers import silence, tone, write_wav
 
 
@@ -91,10 +92,37 @@ class SliceAudioTests(unittest.TestCase):
         written = sorted(path.name for path in (self.out_root / "pond").glob("*.png"))
         self.assertEqual(written, ["a_start0s.png"])
 
-    def _run(self, *argv: str) -> tuple[int, str]:
+    def test_discovers_uppercase_wav_extension(self) -> None:
+        write_wav(self.raw_root / "pond" / "recording.WAV", tone(1000.0, 5))
+
+        result, _ = self._run("--raw-root", str(self.raw_root), "--out-root", str(self.out_root))
+
+        self.assertEqual(result, 0)
+        self.assertTrue((self.out_root / "pond" / "recording_start0s.png").is_file())
+
+    def test_rejects_out_root_inside_labeled_directory(self) -> None:
+        repo_root = self.root / "repo"
+        load_test_config(repo_root)
+        (repo_root / "labeled").mkdir(parents=True)
+        write_wav(self.raw_root / "pond" / "recording.wav", tone(1000.0, 5))
+        out_root = repo_root / "labeled" / "spectrograms"
+
+        result, _ = self._run(
+            "--raw-root", str(self.raw_root),
+            "--out-root", str(out_root),
+            repo_root=repo_root,
+        )
+
+        self.assertEqual(result, 2)
+        self.assertFalse(list(out_root.rglob("*.png")))
+
+    def _run(self, *argv: str, repo_root: Path | None = None) -> tuple[int, str]:
         output = io.StringIO()
         with redirect_stdout(output), redirect_stderr(output):
-            result = self.module.main(argv)
+            if repo_root is None:
+                result = self.module.main(argv)
+            else:
+                result = self.module.main(argv, repo_root=repo_root)
         return result, output.getvalue()
 
     def _load_module(self):

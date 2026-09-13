@@ -9,9 +9,11 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 from frog_classifier.data import load_preprocessing_config
 from frog_classifier.preprocessing import render_recording
+from frog_classifier.preprocessing.spectrogram import decode_png, encode_png
 from tests.preprocessing.helpers import silence, tone, write_wav
 
 
@@ -46,12 +48,24 @@ class VerifySpectrogramsTests(unittest.TestCase):
         self.assertIn("2 checked, 2 matched", output)
 
     def test_tampered_image_is_reported_and_fails(self) -> None:
-        self.labeled.write_bytes(self.labeled.read_bytes() + b"\x00")
+        image = decode_png(self.labeled.read_bytes())
+        image[0, 0] = 255 - image[0, 0]
+        self.labeled.write_bytes(encode_png(image))
 
         result, output = self._run("--all")
 
         self.assertEqual(result, 2)
         self.assertIn(f"DIFFERENT {self.labeled}", output)
+
+    def test_re_encoded_image_is_reported_as_encoding_drift(self) -> None:
+        image = Image.open(self.labeled)
+        image.load()
+        image.save(self.labeled, format="PNG", compress_level=1)
+
+        result, output = self._run("--all")
+
+        self.assertEqual(result, 2)
+        self.assertIn(f"ENCODING_DIFFERS {self.labeled}", output)
 
     def test_missing_recording_is_reported_and_fails(self) -> None:
         self._write(self.labeled_root / "non_target" / "ghost_start0s.png", b"x")
@@ -61,6 +75,20 @@ class VerifySpectrogramsTests(unittest.TestCase):
         self.assertEqual(result, 2)
         self.assertIn("MISSING_RECORDING", output)
         self.assertIn("ghost_start0s.png", output)
+
+    def test_ambiguous_recording_is_reported_and_fails(self) -> None:
+        self._write(self.raw_root / "site" / "rec.mp3", b"")
+
+        result, output = self._run("--all")
+
+        self.assertEqual(result, 2)
+        self.assertIn("AMBIGUOUS_RECORDING", output)
+
+    def test_sample_below_one_is_rejected(self) -> None:
+        result, output = self._run("--sample", "0")
+
+        self.assertEqual(result, 2)
+        self.assertIn("--sample", output)
 
     def test_chunk_beyond_recording_is_reported_and_fails(self) -> None:
         self._write(self.spectrogram_root / "site" / "rec_start30s.png", b"x")

@@ -91,6 +91,10 @@ class ChunkImageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ceiling"):
             chunk_image(np.zeros((2, 2)), np.zeros(2), db_floor=10.0, db_ceiling=10.0)
 
+    def test_rejects_one_dimensional_mel_db(self) -> None:
+        with self.assertRaisesRegex(ValueError, r"\(bands, frames\)"):
+            chunk_image(np.zeros(4), np.zeros(4), db_floor=0.0, db_ceiling=30.0)
+
     def test_rejects_floor_with_wrong_shape(self) -> None:
         with self.assertRaisesRegex(ValueError, "band"):
             chunk_image(np.zeros((2, 2)), np.zeros(3), db_floor=0.0, db_ceiling=30.0)

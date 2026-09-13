@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 verify_spectrograms.py
 
@@ -7,7 +5,12 @@ Prove that stored spectrogram images were rendered under the tracked
 preprocessing contract by re-rendering their recordings from raw audio and
 comparing bytes. Samples from both the labeled tree and the queue, or checks
 everything with --all.
+
+Per-image statuses: MATCH, DIFFERENT, ENCODING_DIFFERS, INVALID_NAME,
+MISSING_RECORDING, AMBIGUOUS_RECORDING, MISSING_CHUNK.
 """
+
+from __future__ import annotations
 
 import argparse
 import random
@@ -17,13 +20,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+import numpy as np
+
 from frog_classifier.data import (
     ExampleNameError,
     PreprocessingConfig,
     load_preprocessing_config,
     parse_example_filename,
 )
-from frog_classifier.preprocessing import render_recording
+from frog_classifier.preprocessing import decode_png, render_recording
 
 
 SUPPORTED_EXTS = {".wav", ".mp3"}
@@ -35,14 +40,13 @@ class VerificationResult:
     status: str
 
 
-def find_recording(raw_root: Path, stem: str) -> Path | None:
-    """The single recording with this stem beneath raw_root, or None."""
-    matches = sorted(
+def find_recording(raw_root: Path, stem: str) -> list[Path]:
+    """Every recording beneath raw_root with this exact stem, sorted."""
+    return sorted(
         path
-        for path in raw_root.rglob(f"{stem}.*")
-        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTS
+        for path in raw_root.rglob("*")
+        if path.is_file() and path.stem == stem and path.suffix.lower() in SUPPORTED_EXTS
     )
-    return matches[0] if len(matches) == 1 else None
 
 
 def verify_images(
@@ -61,21 +65,34 @@ def verify_images(
         by_stem[key.recording_id].append((path, key.start_s))
 
     for stem, items in sorted(by_stem.items()):
-        recording = find_recording(raw_root, stem)
-        if recording is None:
+        matches = find_recording(raw_root, stem)
+        if len(matches) == 0:
             results.extend(VerificationResult(path, "MISSING_RECORDING") for path, _ in items)
             continue
+        if len(matches) > 1:
+            results.extend(VerificationResult(path, "AMBIGUOUS_RECORDING") for path, _ in items)
+            continue
+        recording = matches[0]
         rendered = {chunk.start_s: chunk.png_bytes for chunk in render_recording(recording, config)}
         for path, start_s in items:
             expected = rendered.get(start_s)
             if expected is None:
                 status = "MISSING_CHUNK"
-            elif path.read_bytes() == expected:
-                status = "MATCH"
             else:
-                status = "DIFFERENT"
+                actual = path.read_bytes()
+                status = "MATCH" if actual == expected else _compare_pixels(actual, expected)
             results.append(VerificationResult(path, status))
     return sorted(results, key=lambda result: str(result.image_path))
+
+
+def _compare_pixels(actual: bytes, expected: bytes) -> str:
+    """DIFFERENT unless both sides decode to identical pixels (ENCODING_DIFFERS)."""
+    try:
+        actual_pixels = decode_png(actual)
+        expected_pixels = decode_png(expected)
+    except Exception:
+        return "DIFFERENT"
+    return "ENCODING_DIFFERS" if np.array_equal(actual_pixels, expected_pixels) else "DIFFERENT"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,6 +115,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     repo_root = Path(__file__).resolve().parents[1]
     args = build_parser().parse_args(argv)
+    if args.sample < 1:
+        print("--sample must be at least 1", file=sys.stderr)
+        return 2
     config = load_preprocessing_config(repo_root / "config" / "preprocessing.toml")
     raw_root = _resolve(repo_root, args.raw_root)
     trees = (
