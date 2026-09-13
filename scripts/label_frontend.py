@@ -143,9 +143,11 @@ def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: 
             confirm_decision(clip, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
             st.session_state["last_move"] = None
         else:
-            st.session_state["last_move"] = record_decision(
+            clip_index = st.session_state["index"]
+            move = record_decision(
                 clip, decision, labeled_root=labeled_root, log=log, faint=faint, chunk_seconds=chunk_seconds,
             )
+            st.session_state["last_move"] = (clip_index, move)
     except (ValueError, FileExistsError) as error:
         st.session_state["error"] = str(error)
         return
@@ -237,18 +239,20 @@ def main() -> None:
         left, right = st.columns(2, gap="small")
         with left:
             if st.button("Skip", use_container_width=True):
+                st.session_state.pop("error", None)
                 st.session_state["index"] += 1
                 st.rerun()
         with right:
             if st.button("Undo last move", use_container_width=True):
-                move = st.session_state.get("last_move")
-                if move is None:
+                last_move = st.session_state.get("last_move")
+                if last_move is None:
                     st.session_state["error"] = "Nothing to undo."
                 else:
+                    clip_index, move = last_move
                     try:
                         undo_move(move, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
                         st.session_state["last_move"] = None
-                        st.session_state["index"] = max(index - 1, 0)
+                        st.session_state["index"] = clip_index
                         st.session_state.pop("error", None)
                     except (FileNotFoundError, FileExistsError) as error:
                         st.session_state["error"] = str(error)
