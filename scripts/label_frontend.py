@@ -23,11 +23,16 @@ from frog_classifier.preprocessing.display import colorize
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODE_LABEL = "Label new clips"
 MODE_AUDIT = "Audit labeled clips"
-BUTTONS = (
-    ("Frog (target)", "litoria_aurea", False),
-    ("Frog, faint", "litoria_aurea", True),
-    ("Background (no target frog)", "non_target", False),
-    ("Unsure (review later)", "unsure", False),
+# Two rows of two: the frequent pair (Frog, Background) sits on top.
+BUTTON_ROWS = (
+    (
+        ("Frog (target)", "litoria_aurea", False),
+        ("Background (no target frog)", "non_target", False),
+    ),
+    (
+        ("Frog, faint", "litoria_aurea", True),
+        ("Unsure (review later)", "unsure", False),
+    ),
 )
 
 
@@ -253,11 +258,13 @@ def main() -> None:
             st.audio(audio_path.read_bytes(), format="audio/wav")
         else:
             st.info("No audio found for this clip.")
-        for label, decision, faint in BUTTONS:
-            kind = "primary" if decision == "litoria_aurea" and not faint else "secondary"
-            if st.button(label, type=kind, use_container_width=True):
-                _decide(clip, decision, faint, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
-                st.rerun()
+        for row in BUTTON_ROWS:
+            for column, (label, decision, faint) in zip(st.columns(2, gap="small"), row):
+                kind = "primary" if decision == "litoria_aurea" and not faint else "secondary"
+                with column:
+                    if st.button(label, type=kind, use_container_width=True):
+                        _decide(clip, decision, faint, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
+                        st.rerun()
         left, right = st.columns(2, gap="small")
         with left:
             if st.button("Skip", use_container_width=True):
