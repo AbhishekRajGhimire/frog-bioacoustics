@@ -64,7 +64,9 @@ uv run python scripts/sync_labeled_images.py
 
 The command checks every labeled name first and changes nothing if any name fails to parse, has no fresh counterpart, or has more than one.
 Pass `--dry-run` to see how many images would be replaced.
-Pass `--labeled-root` and `--spectrogram-root` together when syncing pond data.
+If the command stops partway, for example because a labeler still holds an image open, it reports how many images were replaced and which one failed.
+Run `scripts/slice_audio.py` again to recreate the queue copies that were already consumed, then run the sync again.
+The labeled tree is shared by every source, so regenerate every source's queue before syncing, or the command reports missing counterparts for the labels of a source that has not been regenerated.
 
 ## Verify stored spectrograms
 
@@ -75,6 +77,7 @@ uv run python scripts/verify_spectrograms.py --sample 50
 ```
 
 The command draws a seeded sample from the labeled tree and from the queue, re-renders each recording, and prints `MATCH` or the reason for a mismatch per image.
+A stored image whose bytes differ but whose pixels match a fresh render is reported as `ENCODING_DIFFERS`, which points at a PNG encoder change rather than a rendering change.
 It exits non-zero on any mismatch.
 Pass `--all` to check every image, which renders every recording once.
 
