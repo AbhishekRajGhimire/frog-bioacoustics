@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 
 import streamlit as st
+from frog_classifier.preprocessing import colorize
 
 import label_spectrograms as core
 
@@ -410,7 +411,7 @@ def main() -> None:
     col_img, col_controls = st.columns([2, 1], gap="large")
 
     with col_img:
-        st.image(img_bytes, use_container_width=True)
+        st.image(colorize(img_bytes), use_container_width=True)
 
     # Prepare audio for this item
     audio_path = core.find_processed_chunk_audio(paths, img_path)

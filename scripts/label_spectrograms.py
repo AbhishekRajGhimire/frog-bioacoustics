@@ -328,12 +328,12 @@ def _init_image_window(img_path: Path, title: str, *, state: UiState):
     import numpy as np
 
     with Image.open(img_path) as img:
-        img_arr = np.asarray(img.convert("RGB"))
+        img_arr = np.asarray(img.convert("L"))
 
     fig, ax = plt.subplots()
     # Leave room for buttons at the bottom.
     fig.subplots_adjust(bottom=0.18)
-    im = ax.imshow(img_arr)
+    im = ax.imshow(img_arr, cmap="viridis", vmin=0, vmax=255, aspect="auto")
     ax.axis("off")
     ax.set_title(title, fontsize=10)
 
@@ -381,7 +381,7 @@ def _update_image_window(fig, ax, im, img_path: Path, title: str) -> None:
     import numpy as np
 
     with Image.open(img_path) as img:
-        img_arr = np.asarray(img.convert("RGB"))
+        img_arr = np.asarray(img.convert("L"))
     im.set_data(img_arr)
     ax.set_title(title, fontsize=10)
     try:

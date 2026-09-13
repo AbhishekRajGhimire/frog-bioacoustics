@@ -1,3 +1,4 @@
+from .display import colorize
 from .recording import (
     RenderedChunk,
     load_waveform,
@@ -15,6 +16,7 @@ from .spectrogram import (
 __all__ = [
     "RenderedChunk",
     "chunk_image",
+    "colorize",
     "decode_png",
     "encode_png",
     "load_waveform",
