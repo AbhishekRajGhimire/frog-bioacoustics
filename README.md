@@ -67,12 +67,6 @@ Prove a random sample of stored spectrograms matches the raw audio and the track
 uv run python scripts/verify_spectrograms.py --sample 50
 ```
 
-Launch the terminal labeler:
-
-```powershell
-uv run python scripts/label_spectrograms.py --limit 12 --shuffle
-```
-
 Build the validated versioned manifest and data-quality reports:
 
 ```powershell
@@ -87,7 +81,7 @@ uv run python scripts/train_baseline.py
 
 ## Labeling policy
 
-Use Frog only when the target call is confidently present, even if it is faint.
+Use Frog only when the target call is confidently present, and add the faint tag when it is distant.
 Use Background only when the clip is confidently non-target.
-Use Skip when identification is uncertain, and do not convert uncertainty into a negative label.
-Phase 3 will add an explicit review-later state and signal-quality metadata.
+Use Unsure when you cannot decide; the clip waits in `labeled/unsure/` and never enters training.
+Every decision is appended to `labeled/decisions.csv`, and the labeler's audit mode replays labeled clips so a decision can be confirmed or changed.

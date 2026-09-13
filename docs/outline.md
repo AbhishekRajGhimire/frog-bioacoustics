@@ -58,8 +58,9 @@ Each image shows decibels above the recording's own noise floor per frequency ba
 
 ### 3. Human labeling
 
-The labelers show each spectrogram with its matching audio window.
-A confident target call moves to `labeled/litoria_aurea`, while a confident background example moves to `labeled/non_target`.
+The Streamlit labeler shows each spectrogram with its matching audio window.
+A confident target call moves to `labeled/litoria_aurea`, a confident background example moves to `labeled/non_target`, and a clip you cannot decide on moves to `labeled/unsure`.
+Every press is appended to `labeled/decisions.csv`, and the audit mode replays labeled clips so a decision can be confirmed or changed later.
 
 ### 4. Manifest and validation
 
@@ -100,19 +101,21 @@ frog-bioacoustics/
   labeled/                     human-selected examples and generated manifest
     litoria_aurea/             confident target-call examples
     non_target/                confident non-target examples
+    unsure/                    clips the reviewer could not decide on
+    decisions.csv              append-only log of every labeling decision
 
   scripts/                     commands a person runs
     slice_audio.py             generate spectrograms
     sync_labeled_images.py     replace labeled images after regeneration
     verify_spectrograms.py     prove stored images match the contract
-    label_frontend.py          Streamlit labeling interface
-    label_spectrograms.py      Matplotlib labeling interface
+    label_frontend.py          Streamlit labeler with label and audit modes
     build_manifest.py          validate labels and build reports
     train_baseline.py          run the strict sanity baseline
 
   src/frog_classifier/         reusable Python package
     data/                      config, naming, manifests, folds, validation, and reports
     preprocessing/             Mel rendering, noise floor, PNG encoding, and display colours
+    labeling/                  queue order, decision log, moves, and playback audio
 
   tests/                       synthetic automated checks
   models/                      future generated model artifacts
@@ -211,15 +214,9 @@ Generated files go under `processed/` and should not be committed.
 
 On Windows, double-click `Launch_Labeler.bat` to open the graphical labeler.
 
-The alternative Matplotlib labeler is:
-
-```powershell
-uv run python scripts/label_spectrograms.py --limit 12 --shuffle
-```
-
 Use Frog only when the target call is confidently present, even if it is faint.
 Use Background only when the clip is confidently non-target.
-Use Skip when identification is uncertain, and never convert uncertainty into a negative label.
+Use Unsure when identification is uncertain, and never convert uncertainty into a negative label.
 
 ### Build the validated manifest
 
@@ -253,6 +250,7 @@ Use this guide when deciding which file to edit:
 | Reusable data behavior | `src/frog_classifier/data/` |
 | Audio and spectrogram defaults | `config/preprocessing.toml` |
 | Spectrogram rendering behavior | `src/frog_classifier/preprocessing/` |
+| Labeling queue, decisions, or playback audio | `src/frog_classifier/labeling/` |
 | Automated verification | `tests/` |
 | Beginner entry points | `README.md` or `docs/outline.md` |
 | Detailed operating instructions | `docs/workflow.md` |
@@ -304,7 +302,7 @@ uv lock --check
 uv sync --frozen
 uv pip check
 uv run python -m unittest discover -s tests -v
-uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/label_spectrograms.py scripts/slice_audio.py scripts/train_baseline.py
+uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/slice_audio.py scripts/train_baseline.py
 git diff --check
 git status --short
 ```
@@ -350,7 +348,7 @@ Test data-changing commands on a small explicit sample first.
 ### Do not turn uncertainty into a negative label
 
 An unclear or distant call is not reliable background evidence.
-Skip uncertain clips until Phase 3 adds an explicit review-later state and signal-quality metadata.
+Mark uncertain clips Unsure so they wait for a second hearing instead of becoming background labels.
 
 ### Keep recording groups together
 

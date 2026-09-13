@@ -83,27 +83,36 @@ Pass `--all` to check every image, which renders every recording once.
 
 ## Apply labels
 
-The recommended interface is `scripts/label_frontend.py`, launched through `Launch_Labeler.bat`.
-It displays a spectrogram, locates or exports the matching five-second WAV chunk, and moves the PNG into one canonical label directory.
-The terminal and Matplotlib alternative is:
+Double-click `Launch_Labeler.bat`, or run the Streamlit labeler directly:
 
 ```powershell
-uv run python scripts/label_spectrograms.py --limit 12 --shuffle
+uv run python -m streamlit run scripts/label_frontend.py
 ```
 
-Use `--limit 0` only when intentionally starting an unrestricted session.
-The labeler defaults to the external spectrogram, raw-audio, and cached-chunk trees.
-Pass the corresponding pond paths together when labeling pond data so audio lookup remains deterministic.
+The sidebar switches between two modes.
+"Label new clips" walks the queue under the spectrogram root: night clips first, shuffled with the seed, at most five per recording per session, with one daytime clip for every nine night clips.
+"Audit labeled clips" walks the three labeled folders in the same order, shows the current label, and lets you confirm it by pressing the same button or change it by pressing another.
+Both modes play the five-second audio window, exporting it from the recording on first use.
+
+Buttons: Frog, Frog faint, Background, Unsure, Skip, and Undo.
+Skip leaves no record.
+Undo reverts only the last move of the session.
+Every other press appends one row to `labeled/decisions.csv`.
 
 ### Labeling policy
 
-Use Frog only when the target call is confidently present, even if it is faint.
+Use Frog only when the target call is confidently present, and Frog faint when it is distant.
 Use Background only when the clip is confidently non-target.
-Use Skip when identification is uncertain, and do not convert uncertainty into a negative label.
-Phase 3 will add an explicit review-later state and signal-quality metadata.
+Use Unsure when identification is uncertain, and never convert uncertainty into a negative label.
 
 Frog is stored as `labeled/litoria_aurea` with numeric label `1`.
 Background is stored as `labeled/non_target` with numeric label `0`.
+Unsure is stored as `labeled/unsure` and is excluded from the manifest.
+
+### Audit the existing labels
+
+Run audit mode once before training and review the night-time background clips first, since they are where an unsure call could be hiding.
+Rebuild the manifest afterwards.
 
 ## Build the validated manifest
 
@@ -172,7 +181,7 @@ uv lock --check
 uv sync --frozen
 uv pip check
 uv run python -m unittest discover -s tests -v
-uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/label_spectrograms.py scripts/slice_audio.py scripts/sync_labeled_images.py scripts/train_baseline.py scripts/verify_spectrograms.py
+uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/slice_audio.py scripts/sync_labeled_images.py scripts/train_baseline.py scripts/verify_spectrograms.py
 git diff --check
 ```
 

@@ -13,6 +13,7 @@ Verified on September 13, 2026:
 - Spectrograms awaiting review: 37,019
 - Positive `litoria_aurea` labels: 13
 - Negative `non_target` labels: 48
+- Unsure `labeled/unsure` clips: 0
 - Unique labeled recording groups: 60
 - Saved models: 0
 - Inference or analytics result artifacts: 0
@@ -126,6 +127,11 @@ Build a diverse label set that represents the real conditions in which the detec
 - Review a sample of labels twice to estimate consistency and correct systematic mistakes.
 - Prevent near-duplicate chunks from dominating any class.
 - Preserve enough held-out recording groups for later evaluation.
+
+### Progress
+
+September 13, 2026: the labeler gained an Unsure state, an append-only decision log, an audit mode, and a night-first queue with a per-recording cap.
+The audit of the existing 61 labels is the next labeling session.
 
 ### Acceptance criteria
 

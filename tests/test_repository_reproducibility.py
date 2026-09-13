@@ -256,6 +256,13 @@ class OperationalDocumentationTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)
 
+    def test_documents_never_mention_the_retired_terminal_labeler(self) -> None:
+        for relative_path in ("README.md", "AGENTS.md", "docs/outline.md", "docs/architecture.md", "docs/workflow.md"):
+            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            with self.subTest(file=relative_path):
+                self.assertNotIn("label_spectrograms.py", text)
+                self.assertNotIn("Use Skip when identification is uncertain", text)
+
 
 if __name__ == "__main__":
     unittest.main()

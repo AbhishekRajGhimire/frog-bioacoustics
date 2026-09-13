@@ -28,7 +28,7 @@ Update the authoritative document when its behavior changes.
 - `tests/` contains synthetic automated verification.
 - `raw/` contains immutable source recordings.
 - `processed/` contains regenerable spectrograms and playback chunks.
-- `labeled/` contains human-selected examples and the generated manifest.
+- `labeled/` contains human-selected examples, the unsure holding folder, the decision log, and the generated manifest.
 - `models/` and `results/` contain generated artifacts.
 - `docs/` contains project guidance, architecture, workflow, and planning history.
 
@@ -62,7 +62,7 @@ Prefer clear code over comments that compensate for confusing structure.
 - Preserve human labels because they are expensive and non-regenerable.
 - Use Frog only when the target call is confidently present.
 - Use Background only when the clip is confidently non-target.
-- Skip uncertain examples instead of converting uncertainty into a negative label.
+- Mark uncertain examples Unsure instead of converting uncertainty into a negative label; unsure clips never enter training.
 - Keep every recording group in one evaluation fold and split.
 - Use the validated manifest as the source of truth for training and evaluation membership.
 - Do not commit recordings, generated spectrograms, labels, manifests, reports, models, or analytics without an explicit storage decision.
