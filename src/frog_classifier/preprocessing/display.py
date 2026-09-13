@@ -10,7 +10,7 @@ from PIL import Image
 def colorize(png_bytes: bytes) -> np.ndarray:
     """RGB uint8 view of a grayscale PNG through the viridis colour map.
 
-    Storage stays grayscale; this exists only so the labelers show the
+    Storage stays grayscale; this exists only so the labeler shows the
     familiar colours.
     """
     with Image.open(io.BytesIO(png_bytes)) as image:

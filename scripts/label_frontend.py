@@ -120,7 +120,9 @@ section[data-testid="stSidebar"] button {
 
 
 def _pngs_under(root: Path) -> list[Path]:
-    return sorted(root.rglob("*.png")) if root.is_dir() else []
+    if not root.is_dir():
+        return []
+    return sorted(path for path in root.rglob("*") if path.is_file() and path.suffix.casefold() == ".png")
 
 
 def _labeled_pngs(labeled_root: Path) -> list[Path]:
@@ -128,7 +130,9 @@ def _labeled_pngs(labeled_root: Path) -> list[Path]:
     for folder in DECISION_FOLDERS:
         directory = labeled_root / folder
         if directory.is_dir():
-            clips.extend(sorted(directory.glob("*.png")))
+            clips.extend(
+                sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.casefold() == ".png")
+            )
     return clips
 
 
@@ -140,7 +144,7 @@ def _reset_session() -> None:
 def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: DecisionLog, chunk_seconds: int) -> None:
     try:
         if current_folder(clip, labeled_root) == decision:
-            confirm_decision(clip, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
+            confirm_decision(clip, labeled_root=labeled_root, log=log, faint=True if faint else None, chunk_seconds=chunk_seconds)
             st.session_state["last_move"] = None
         else:
             clip_index = st.session_state["index"]
@@ -148,7 +152,7 @@ def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: 
                 clip, decision, labeled_root=labeled_root, log=log, faint=faint, chunk_seconds=chunk_seconds,
             )
             st.session_state["last_move"] = (clip_index, move)
-    except (ValueError, FileExistsError) as error:
+    except (ValueError, OSError) as error:
         st.session_state["error"] = str(error)
         return
     st.session_state.pop("error", None)
@@ -163,7 +167,7 @@ def main() -> None:
     chunk_seconds = config.audio.chunk_seconds
 
     with st.sidebar:
-        mode = st.radio("Mode", (MODE_LABEL, MODE_AUDIT), on_change=_reset_session)
+        mode = st.radio("Mode", (MODE_LABEL, MODE_AUDIT))
         st.header("Quick start")
         st.write("1) Press Play and listen")
         st.write("2) Choose Frog, Frog faint, Background, or Unsure")
@@ -181,11 +185,19 @@ def main() -> None:
             _reset_session()
             st.rerun()
 
+    settings = (mode, str(spectrogram_root), str(raw_root), str(chunk_root), str(labeled_root), seed, limit, cap)
+    if st.session_state.get("settings") != settings:
+        if "settings" in st.session_state:
+            st.session_state["notice"] = "Settings changed, so the queue was rebuilt."
+        _reset_session()
+        st.session_state["settings"] = settings
+
     log = DecisionLog(labeled_root / LOG_NAME)
 
     if "queue" not in st.session_state:
         source = _pngs_under(spectrogram_root) if mode == MODE_LABEL else _labeled_pngs(labeled_root)
-        queue = build_queue(source, seed=seed, chunk_seconds=chunk_seconds, per_recording_cap=cap)
+        per_recording_cap = cap if mode == MODE_LABEL else max(len(source), 1)
+        queue = build_queue(source, seed=seed, chunk_seconds=chunk_seconds, per_recording_cap=per_recording_cap)
         if limit > 0:
             queue = queue[:limit]
         st.session_state.update(queue=queue, index=0, last_move=None)
@@ -201,6 +213,8 @@ def main() -> None:
 
     if st.session_state.get("error"):
         st.error(st.session_state["error"])
+    if st.session_state.get("notice"):
+        st.info(st.session_state.pop("notice"))
 
     if not queue:
         st.warning("No clips found for this mode.")
@@ -214,16 +228,24 @@ def main() -> None:
     st.progress((index + 1) / len(queue))
     st.caption(str(clip))
     if mode == MODE_AUDIT:
-        st.info(f"Current label: {current_folder(clip, labeled_root)}")
+        origin = current_folder(clip, labeled_root)
+        if origin is None:
+            st.warning("This clip is not inside the labeled root; press Reload clips.")
+        else:
+            st.info(f"Current label: {origin}")
 
     col_img, col_controls = st.columns([2, 1], gap="large")
-    with col_img:
-        st.image(colorize(clip.read_bytes()), use_container_width=True)
-
-    audio_path = find_or_export_chunk(
-        clip, raw_root=raw_root, chunk_root=chunk_root, config=config,
-        spectrogram_root=spectrogram_root if mode == MODE_LABEL else None,
-    )
+    audio_path = None
+    if not clip.is_file():
+        with col_img:
+            st.error("This clip no longer exists on disk; press Skip or Reload clips.")
+    else:
+        with col_img:
+            st.image(colorize(clip.read_bytes()), use_container_width=True)
+        audio_path = find_or_export_chunk(
+            clip, raw_root=raw_root, chunk_root=chunk_root, config=config,
+            spectrogram_root=spectrogram_root if mode == MODE_LABEL else None,
+        )
 
     with col_controls:
         st.markdown("### Actions")
@@ -254,7 +276,7 @@ def main() -> None:
                         st.session_state["last_move"] = None
                         st.session_state["index"] = clip_index
                         st.session_state.pop("error", None)
-                    except (FileNotFoundError, FileExistsError) as error:
+                    except (ValueError, OSError) as error:
                         st.session_state["error"] = str(error)
                 st.rerun()
         st.divider()

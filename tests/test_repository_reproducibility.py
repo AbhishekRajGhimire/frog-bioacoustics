@@ -29,6 +29,8 @@ GENERATED_PATHS = (
     "processed/external/chunks/example.wav",
     "processed/external/spectrograms/example.png",
     "labeled/litoria_aurea/example.png",
+    "labeled/decisions.csv",
+    "labeled/unsure/example.png",
     "models/example.pkl",
     "results/analytics/example.csv",
     "results/data_quality/example.json",
