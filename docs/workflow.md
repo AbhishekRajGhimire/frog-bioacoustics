@@ -93,6 +93,8 @@ The sidebar switches between two modes.
 "Label new clips" walks the queue under the spectrogram root: night clips first, shuffled with the seed, at most five per recording per session, with one daytime clip for every nine night clips.
 "Audit labeled clips" walks the three labeled folders in the same order, shows the current label, and lets you confirm it by pressing the same button or change it by pressing another.
 Both modes play the five-second audio window, exporting it from the recording on first use.
+Advanced settings hold the four roots, the seed, the session limit, and the per-recording cap, and changing any of them rebuilds the queue.
+The per-recording cap applies to label mode only, so an audit session re-hears every labeled clip.
 
 Buttons: Frog, Frog faint, Background, Unsure, Skip, and Undo.
 Skip leaves no record.
