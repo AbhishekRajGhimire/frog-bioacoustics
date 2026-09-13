@@ -1,39 +1,105 @@
 from __future__ import annotations
 
-import dataclasses
 import importlib.util
+import io
 import sys
+import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+
+import numpy as np
+
+from frog_classifier.preprocessing.spectrogram import decode_png
+from tests.preprocessing.helpers import silence, tone, write_wav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "slice_audio.py"
 
 
-class SliceAudioPreprocessingIntegrationTests(unittest.TestCase):
-    def test_slicer_config_has_no_preprocessing_defaults(self) -> None:
-        """The tracked TOML is the only source of preprocessing values.
+class SliceAudioTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.raw_root = self.root / "raw"
+        self.out_root = self.root / "processed"
+        self.module = self._load_module()
 
-        Stale dataclass defaults once diverged from the command-line defaults
-        and hid which frequency band actually produced the spectrograms.
-        """
-        module = self._load_module()
-        fields = dataclasses.fields(module.Config)
-        defaulted = sorted(
-            field.name
-            for field in fields
-            if field.default is not dataclasses.MISSING
-            or field.default_factory is not dataclasses.MISSING
+    def test_parser_exposes_no_preprocessing_overrides(self) -> None:
+        parser = self.module.build_parser(REPO_ROOT)
+        arguments = parser.parse_args([])
+
+        for name in ("sample_rate", "chunk_seconds", "n_mels", "fmin", "fmax"):
+            with self.subTest(option=name):
+                self.assertFalse(hasattr(arguments, name))
+        self.assertFalse(hasattr(self.module, "Config"))
+
+    def test_writes_one_image_per_complete_chunk_preserving_folders(self) -> None:
+        write_wav(
+            self.raw_root / "pond" / "recording.wav",
+            np.concatenate([silence(5), tone(1000.0, 7)]),
         )
-        self.assertEqual(defaulted, [])
+
+        result, _ = self._run("--raw-root", str(self.raw_root), "--out-root", str(self.out_root))
+
+        self.assertEqual(result, 0)
+        written = sorted(path.name for path in (self.out_root / "pond").glob("*.png"))
+        self.assertEqual(written, ["recording_start0s.png", "recording_start5s.png"])
+        image = decode_png((self.out_root / "pond" / "recording_start5s.png").read_bytes())
+        self.assertEqual(image.shape, (128, 216))
+
+    def test_overwrites_an_existing_image_by_name(self) -> None:
+        write_wav(self.raw_root / "pond" / "recording.wav", tone(1000.0, 5))
+        stale = self.out_root / "pond" / "recording_start0s.png"
+        stale.parent.mkdir(parents=True)
+        stale.write_bytes(b"stale")
+
+        result, _ = self._run("--raw-root", str(self.raw_root), "--out-root", str(self.out_root))
+
+        self.assertEqual(result, 0)
+        self.assertNotEqual(stale.read_bytes(), b"stale")
+        self.assertEqual(decode_png(stale.read_bytes()).shape, (128, 216))
+
+    def test_continues_after_an_unreadable_file(self) -> None:
+        broken = self.raw_root / "pond" / "broken.wav"
+        broken.parent.mkdir(parents=True)
+        broken.write_bytes(b"not audio")
+        write_wav(self.raw_root / "pond" / "recording.wav", tone(1000.0, 5))
+
+        result, output = self._run(
+            "--raw-root", str(self.raw_root), "--out-root", str(self.out_root),
+        )
+
+        self.assertEqual(result, 0)
+        self.assertIn("[ERROR]", output)
+        self.assertIn("broken.wav", output)
+        self.assertTrue((self.out_root / "pond" / "recording_start0s.png").is_file())
+
+    def test_limit_files_bounds_each_pond(self) -> None:
+        write_wav(self.raw_root / "pond" / "a.wav", tone(1000.0, 5))
+        write_wav(self.raw_root / "pond" / "b.wav", tone(1000.0, 5))
+
+        result, _ = self._run(
+            "--raw-root", str(self.raw_root),
+            "--out-root", str(self.out_root),
+            "--limit-files", "1",
+        )
+
+        self.assertEqual(result, 0)
+        written = sorted(path.name for path in (self.out_root / "pond").glob("*.png"))
+        self.assertEqual(written, ["a_start0s.png"])
+
+    def _run(self, *argv: str) -> tuple[int, str]:
+        output = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(output):
+            result = self.module.main(argv)
+        return result, output.getvalue()
 
     def _load_module(self):
         module_name = f"slice_audio_test_{id(self)}"
-        specification = importlib.util.spec_from_file_location(
-            module_name,
-            SCRIPT_PATH,
-        )
+        specification = importlib.util.spec_from_file_location(module_name, SCRIPT_PATH)
         self.assertIsNotNone(specification)
         self.assertIsNotNone(specification.loader)
         module = importlib.util.module_from_spec(specification)
