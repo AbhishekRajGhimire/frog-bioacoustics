@@ -131,7 +131,8 @@ Build a diverse label set that represents the real conditions in which the detec
 ### Progress
 
 September 13, 2026: the labeler gained an Unsure state, an append-only decision log, an audit mode, and a night-first queue with a per-recording cap.
-The audit of the existing 61 labels is the next labeling session.
+The existing 61 labels were audited by ear on September 13, 2026: all 13 frog and 48 background decisions were confirmed, two frog clips were tagged faint, and none was changed or marked unsure.
+Expanding the label set is the next labeling work.
 
 ### Acceptance criteria
 
