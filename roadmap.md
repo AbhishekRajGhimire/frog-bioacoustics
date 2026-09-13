@@ -5,7 +5,7 @@ Work is ordered so data integrity and evaluation quality are established before 
 
 ## Current checkpoint
 
-Verified on July 22, 2026:
+Verified on September 13, 2026:
 
 - Raw recordings: 618
 - Duration per recording: five minutes
@@ -16,8 +16,9 @@ Verified on July 22, 2026:
 - Unique labeled recording groups: 60
 - Saved models: 0
 - Inference or analytics result artifacts: 0
-- Active Git branch: `modern`
+- Active Git branch: `main`
 
+Every spectrogram was regenerated under preprocessing schema version 2 with per-recording noise-floor rendering, and a 100-image sample re-rendered from raw audio byte for byte.
 Preprocessing accounts for every expected five-second example.
 The project is currently limited by label coverage and an evaluation split that can omit the positive class from validation or test data.
 
@@ -104,6 +105,8 @@ Corrected on September 13, 2026:
 
 - The preprocessing configuration previously declared a 0 Hz to 8,000 Hz Mel band, but regenerating sampled spectrograms from raw audio proved every existing PNG was produced with 400 Hz to 4,000 Hz.
 - The configuration now declares 400 Hz to 4,000 Hz, so the checksums above are superseded and the manifest must be regenerated before training.
+- Spectrogram rendering moved to decibels above each recording's noise floor under preprocessing schema version 2; see the [rendering decision](docs/decisions/2026-09-13-spectrogram-rendering.md).
+- The regenerated manifest and reports have the SHA-256 values `6c7edc291d0264e1360975e491b37b985e8d54839f2a0f0b68d202784e5a37eb`, `a5b45aa945ff27d4d6e0c1f8f07e44006ec5a279b966b24e03aaa4181f3a5e4d`, and `101b3e103f8722c2a07cda70b82719e855c5836ba946f24ec26f6720032ad28d`, which supersede the July 22 values above.
 
 ## Phase 3: Purposeful label expansion
 
