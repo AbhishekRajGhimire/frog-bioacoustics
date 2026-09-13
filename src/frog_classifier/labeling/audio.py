@@ -57,7 +57,10 @@ def find_or_export_chunk(
     recording = find_recording(raw_root, key.recording_id, preferred_folder=preferred)
     if recording is None:
         return None
-    relative_folder = recording.resolve().parent.relative_to(raw_root.resolve())
+    try:
+        relative_folder = recording.resolve().parent.relative_to(raw_root.resolve())
+    except ValueError:
+        return None
     chunk_path = chunk_root / relative_folder / f"{key.example_id}.wav"
     if chunk_path.is_file():
         return chunk_path
@@ -71,7 +74,10 @@ def find_or_export_chunk(
         offset=float(key.start_s),
         duration=float(config.audio.chunk_seconds),
     )
-    if len(waveform) == 0:
+    # A partial window must never become a cached chunk, as it cannot be reloaded
+    # to the same full duration once the file is cached.
+    expected = int(sample_rate) * int(config.audio.chunk_seconds)
+    if len(waveform) < expected:
         return None
     write_wav_mono_16bit(chunk_path, waveform, int(sample_rate))
     return chunk_path

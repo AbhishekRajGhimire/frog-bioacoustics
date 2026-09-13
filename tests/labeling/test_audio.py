@@ -72,6 +72,13 @@ class AudioTests(unittest.TestCase):
 
         self.assertEqual(found, self.raw_root / "site" / "rec.wav")
 
+    def test_incomplete_window_is_not_exported(self) -> None:
+        write_wav(self.raw_root / "site" / "short.wav", tone(1000.0, 3))
+        image = self._touch(self.spectrogram_root / "site" / "short_start0s.png")
+
+        self.assertIsNone(find_or_export_chunk(image, raw_root=self.raw_root, chunk_root=self.chunk_root, config=self.config, spectrogram_root=self.spectrogram_root))
+        self.assertFalse((self.chunk_root / "site" / "short_start0s.wav").exists())
+
     def _touch(self, path: Path, content: bytes = b"") -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
