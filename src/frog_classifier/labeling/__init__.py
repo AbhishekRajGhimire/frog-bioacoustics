@@ -1,3 +1,4 @@
+from .audio import find_or_export_chunk, find_recording, write_wav_mono_16bit
 from .decisions import (
     CLASS_FOLDERS,
     DECISION_FOLDERS,
@@ -30,9 +31,12 @@ __all__ = [
     "build_queue",
     "confirm_decision",
     "current_folder",
+    "find_or_export_chunk",
+    "find_recording",
     "hour_of_day",
     "is_night",
     "record_decision",
     "summarize_labels",
     "undo_move",
+    "write_wav_mono_16bit",
 ]
