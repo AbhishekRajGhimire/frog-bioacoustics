@@ -5,7 +5,7 @@ from pathlib import Path
 from frog_classifier.data.config import PreprocessingConfig, load_preprocessing_config
 
 
-VALID_CONFIG = b'''schema_version = 1
+VALID_CONFIG = b'''schema_version = 2
 
 [audio]
 sample_rate_hz = 22050
@@ -17,19 +17,22 @@ drop_incomplete_final_chunk = true
 [spectrogram]
 kind = "mel"
 n_mels = 128
-fmin_hz = 0
-fmax_hz = 8000
+fmin_hz = 400
+fmax_hz = 4000
 power = 2.0
 n_fft = 2048
 hop_length = 512
 
+[normalization]
+reference = "recording"
+noise_floor_percentile = 50
+db_floor = 0
+db_ceiling = 30
+
 [rendering]
 format = "png"
-figure_width_inches = 3.2
-figure_height_inches = 3.2
-dpi = 150
-axis_visible = false
-interpolation = "nearest"
+bit_depth = 8
+low_frequency_at_bottom = true
 
 [classes]
 litoria_aurea = 1

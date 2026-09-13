@@ -9,6 +9,9 @@ from types import MappingProxyType
 from typing import Mapping
 
 
+SUPPORTED_SCHEMA_VERSION = 2
+
+
 @dataclass(frozen=True)
 class AudioConfig:
     sample_rate_hz: int
@@ -30,13 +33,18 @@ class SpectrogramConfig:
 
 
 @dataclass(frozen=True)
+class NormalizationConfig:
+    reference: str
+    noise_floor_percentile: int
+    db_floor: float
+    db_ceiling: float
+
+
+@dataclass(frozen=True)
 class RenderingConfig:
     format: str
-    figure_width_inches: float
-    figure_height_inches: float
-    dpi: int
-    axis_visible: bool
-    interpolation: str
+    bit_depth: int
+    low_frequency_at_bottom: bool
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,7 @@ class PreprocessingConfig:
     schema_version: int
     audio: AudioConfig
     spectrogram: SpectrogramConfig
+    normalization: NormalizationConfig
     rendering: RenderingConfig
     classes: Mapping[str, int]
     source_path: Path
@@ -85,7 +94,9 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise ConfigError(f"invalid preprocessing TOML: {error}") from error
 
-    expected_top_level = {"schema_version", "audio", "spectrogram", "rendering", "classes"}
+    expected_top_level = {
+        "schema_version", "audio", "spectrogram", "normalization", "rendering", "classes",
+    }
     if set(data) != expected_top_level:
         missing = sorted(expected_top_level - set(data))
         unexpected = sorted(set(data) - expected_top_level)
@@ -93,8 +104,11 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
             f"invalid top-level keys: {sorted(data)}; "
             f"missing: {missing}; unexpected: {unexpected}"
         )
-    if _value(data, "schema_version", int) != 1:
-        raise ConfigError("schema_version must be 1")
+    if _value(data, "schema_version", int) != SUPPORTED_SCHEMA_VERSION:
+        raise ConfigError(
+            f"schema_version must be {SUPPORTED_SCHEMA_VERSION}; spectrograms rendered "
+            "under an earlier schema must be regenerated"
+        )
 
     audio_data = _section(data, "audio", {
         "sample_rate_hz", "mono", "chunk_seconds", "overlap_seconds",
@@ -103,9 +117,11 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
     spectrogram_data = _section(data, "spectrogram", {
         "kind", "n_mels", "fmin_hz", "fmax_hz", "power", "n_fft", "hop_length",
     })
+    normalization_data = _section(data, "normalization", {
+        "reference", "noise_floor_percentile", "db_floor", "db_ceiling",
+    })
     rendering_data = _section(data, "rendering", {
-        "format", "figure_width_inches", "figure_height_inches", "dpi",
-        "axis_visible", "interpolation",
+        "format", "bit_depth", "low_frequency_at_bottom",
     })
     classes_data = _section(data, "classes", {"litoria_aurea", "non_target"})
 
@@ -125,13 +141,16 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
         n_fft=int(_value(spectrogram_data, "n_fft", int)),
         hop_length=int(_value(spectrogram_data, "hop_length", int)),
     )
+    normalization = NormalizationConfig(
+        reference=str(_value(normalization_data, "reference", str)),
+        noise_floor_percentile=int(_value(normalization_data, "noise_floor_percentile", int)),
+        db_floor=float(_value(normalization_data, "db_floor", float)),
+        db_ceiling=float(_value(normalization_data, "db_ceiling", float)),
+    )
     rendering = RenderingConfig(
         format=str(_value(rendering_data, "format", str)),
-        figure_width_inches=float(_value(rendering_data, "figure_width_inches", float)),
-        figure_height_inches=float(_value(rendering_data, "figure_height_inches", float)),
-        dpi=int(_value(rendering_data, "dpi", int)),
-        axis_visible=bool(_value(rendering_data, "axis_visible", bool)),
-        interpolation=str(_value(rendering_data, "interpolation", str)),
+        bit_depth=int(_value(rendering_data, "bit_depth", int)),
+        low_frequency_at_bottom=bool(_value(rendering_data, "low_frequency_at_bottom", bool)),
     )
     classes = {
         "litoria_aurea": int(_value(classes_data, "litoria_aurea", int)),
@@ -153,23 +172,26 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
         spectrogram.power,
     ) <= 0:
         raise ConfigError("spectrogram dimensions and power must be positive")
-    if min(
-        rendering.figure_width_inches,
-        rendering.figure_height_inches,
-        rendering.dpi,
-    ) <= 0:
-        raise ConfigError("rendering dimensions and DPI must be positive")
     if spectrogram.kind != "mel" or rendering.format != "png":
         raise ConfigError("only mel spectrograms rendered as png are supported")
-    if rendering.axis_visible or rendering.interpolation != "nearest":
-        raise ConfigError("rendering settings must match the supported image contract")
+    if normalization.reference != "recording":
+        raise ConfigError("normalization reference must be recording")
+    if not 0 <= normalization.noise_floor_percentile <= 100:
+        raise ConfigError("noise_floor_percentile must be between 0 and 100")
+    if normalization.db_ceiling <= normalization.db_floor:
+        raise ConfigError("db_ceiling must exceed db_floor")
+    if rendering.bit_depth != 8:
+        raise ConfigError("bit_depth must be 8")
+    if not rendering.low_frequency_at_bottom:
+        raise ConfigError("low_frequency_at_bottom must be true")
     if classes != {"litoria_aurea": 1, "non_target": 0}:
         raise ConfigError("classes must match the canonical mapping")
 
     return PreprocessingConfig(
-        schema_version=1,
+        schema_version=SUPPORTED_SCHEMA_VERSION,
         audio=audio,
         spectrogram=spectrogram,
+        normalization=normalization,
         rendering=rendering,
         classes=MappingProxyType(classes),
         source_path=path.resolve(),

@@ -1,6 +1,7 @@
 from .config import (
     AudioConfig,
     ConfigError,
+    NormalizationConfig,
     PreprocessingConfig,
     RenderingConfig,
     SpectrogramConfig,
@@ -44,6 +45,7 @@ __all__ = [
     "ManifestIssue",
     "ManifestRow",
     "ManifestValidationError",
+    "NormalizationConfig",
     "PreprocessingConfig",
     "PROVENANCE_NOTE",
     "CountSummary",
