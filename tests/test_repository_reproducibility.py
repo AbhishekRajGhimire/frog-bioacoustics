@@ -18,6 +18,7 @@ PLACEHOLDERS = (
     "processed/ponds/spectrograms/.gitkeep",
     "labeled/litoria_aurea/.gitkeep",
     "labeled/non_target/.gitkeep",
+    "labeled/unsure/.gitkeep",
     "models/.gitkeep",
     "results/analytics/.gitkeep",
     "results/data_quality/.gitkeep",

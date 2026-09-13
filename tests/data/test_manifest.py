@@ -82,6 +82,18 @@ class DiscoverLabeledExamplesTests(unittest.TestCase):
             ["unknown_label_directory"],
         )
 
+    def test_skips_the_unsure_holding_directory(self) -> None:
+        examples = self.discover((
+            "litoria_aurea/recording_start5s.png",
+            "non_target/other_start10s.png",
+            "unsure/third_start15s.png",
+        ))
+
+        self.assertEqual(
+            [example.example_id for example in examples],
+            ["recording_start5s", "other_start10s"],
+        )
+
     def test_reports_unparseable_filename(self) -> None:
         with self.assertRaises(ManifestValidationError) as raised:
             self.discover((

@@ -39,6 +39,10 @@ _INTEGER_COLUMNS = (
     "fold",
 )
 
+# Folders under the label root that hold clips outside training, such as
+# clips the reviewer could not decide on. Discovery skips them silently.
+HOLDING_DIRECTORIES = ("unsure",)
+
 
 @dataclass(frozen=True)
 class LabeledExample:
@@ -215,6 +219,8 @@ def discover_labeled_examples(
 
         relative_to_labels = path.relative_to(label_root)
         label_name = relative_to_labels.parts[0]
+        if label_name in HOLDING_DIRECTORIES:
+            continue
         try:
             image_path = path.relative_to(repo_root).as_posix()
         except ValueError:

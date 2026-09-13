@@ -9,6 +9,7 @@ from .config import (
 )
 from .manifest import (
     LabeledExample,
+    HOLDING_DIRECTORIES,
     MANIFEST_COLUMNS,
     ManifestRow,
     build_manifest_rows,
@@ -40,6 +41,7 @@ __all__ = [
     "ConfigError",
     "ExampleKey",
     "ExampleNameError",
+    "HOLDING_DIRECTORIES",
     "LabeledExample",
     "MANIFEST_COLUMNS",
     "ManifestIssue",
