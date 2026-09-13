@@ -147,8 +147,9 @@ def _reset_session() -> None:
 
 
 def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: DecisionLog, chunk_seconds: int) -> None:
+    origin = current_folder(clip, labeled_root)
     try:
-        if current_folder(clip, labeled_root) == decision:
+        if origin == decision:
             confirm_decision(clip, labeled_root=labeled_root, log=log, faint=True if faint else None, chunk_seconds=chunk_seconds)
             st.session_state["last_move"] = None
         else:
@@ -157,6 +158,8 @@ def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: 
                 clip, decision, labeled_root=labeled_root, log=log, faint=faint, chunk_seconds=chunk_seconds,
             )
             st.session_state["last_move"] = (clip_index, move)
+            if origin is None:
+                st.session_state["pool"] -= 1
     except (ValueError, OSError) as error:
         st.session_state["error"] = str(error)
         return
@@ -205,7 +208,7 @@ def main() -> None:
         queue = build_queue(source, seed=seed, chunk_seconds=chunk_seconds, per_recording_cap=per_recording_cap)
         if limit > 0:
             queue = queue[:limit]
-        st.session_state.update(queue=queue, index=0, last_move=None)
+        st.session_state.update(queue=queue, index=0, last_move=None, pool=len(source))
 
     queue: list[Path] = st.session_state["queue"]
     index: int = st.session_state["index"]
@@ -216,11 +219,11 @@ def main() -> None:
         column.metric(title, progress[folder].clips, f"{progress[folder].recordings} recordings")
     columns[3].metric("Left in this session", max(len(queue) - index, 0))
     # A session is a capped sample (five clips per recording), so its size
-    # barely changes between sessions; the queue count is what shrinks.
-    if mode == MODE_LABEL:
-        columns[4].metric("Unlabeled in queue", len(_pngs_under(spectrogram_root)))
-    else:
-        columns[4].metric("Labeled clips", len(_labeled_pngs(labeled_root)))
+    # barely changes between sessions; the pool count is what shrinks. It is
+    # counted once per session and kept in step with moves, because walking
+    # 37,000 files on every button press made the labeler sluggish.
+    pool_title = "Unlabeled in queue" if mode == MODE_LABEL else "Labeled clips"
+    columns[4].metric(pool_title, st.session_state.get("pool", 0))
 
     if st.session_state.get("error"):
         st.error(st.session_state["error"])
@@ -285,7 +288,9 @@ def main() -> None:
                 else:
                     clip_index, move = last_move
                     try:
-                        undo_move(move, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
+                        returned = undo_move(move, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
+                        if current_folder(returned, labeled_root) is None:
+                            st.session_state["pool"] += 1
                         st.session_state["last_move"] = None
                         st.session_state["index"] = clip_index
                         st.session_state.pop("error", None)
