@@ -211,10 +211,16 @@ def main() -> None:
     index: int = st.session_state["index"]
 
     progress = summarize_labels(labeled_root, chunk_seconds=chunk_seconds)
-    columns = st.columns(4)
+    columns = st.columns(5)
     for column, folder, title in zip(columns, DECISION_FOLDERS, ("Frog", "Background", "Unsure")):
         column.metric(title, progress[folder].clips, f"{progress[folder].recordings} recordings")
-    columns[3].metric("Remaining (this session)", max(len(queue) - index, 0))
+    columns[3].metric("Left in this session", max(len(queue) - index, 0))
+    # A session is a capped sample (five clips per recording), so its size
+    # barely changes between sessions; the queue count is what shrinks.
+    if mode == MODE_LABEL:
+        columns[4].metric("Unlabeled in queue", len(_pngs_under(spectrogram_root)))
+    else:
+        columns[4].metric("Labeled clips", len(_labeled_pngs(labeled_root)))
 
     if st.session_state.get("error"):
         st.error(st.session_state["error"])
