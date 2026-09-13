@@ -19,8 +19,8 @@ from .validation import (
 
 
 PROVENANCE_NOTE = (
-    "The preprocessing checksum records the declared configuration but does "
-    "not cryptographically prove how pre-existing PNG files were generated."
+    "The preprocessing checksum records the declared configuration. Run "
+    "scripts/verify_spectrograms.py to prove stored images were rendered under it."
 )
 
 

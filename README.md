@@ -1,6 +1,7 @@
 # Frog Classifier
 
 Frog Classifier turns long field recordings into fixed five-second Mel-spectrogram examples for careful human review and leakage-safe evaluation of *Litoria aurea* calls.
+Each image shows decibels above its own recording's noise floor, so faint calls stay visible and brightness means the same thing in every image.
 The project is at the Phase 2 data-integrity checkpoint, where reliable manifests, grouped folds, and data-quality reports take priority over model complexity.
 
 ## Start here
@@ -52,6 +53,18 @@ Process pond recordings separately:
 
 ```powershell
 uv run python scripts/slice_audio.py --raw-root raw/ponds --out-root processed/ponds/spectrograms
+```
+
+Replace the labeled images after regenerating spectrograms:
+
+```powershell
+uv run python scripts/sync_labeled_images.py
+```
+
+Prove a random sample of stored spectrograms matches the raw audio and the tracked contract:
+
+```powershell
+uv run python scripts/verify_spectrograms.py --sample 50
 ```
 
 Launch the terminal labeler:

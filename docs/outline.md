@@ -54,6 +54,7 @@ They are source material and should be treated as immutable.
 
 `scripts/slice_audio.py` reads recordings and creates one PNG spectrogram for each complete five-second window.
 Generated spectrograms are stored under `processed/`.
+Each image shows decibels above the recording's own noise floor per frequency band, which keeps faint calls visible and removes steady background such as insect drone.
 
 ### 3. Human labeling
 
@@ -102,6 +103,8 @@ frog-bioacoustics/
 
   scripts/                     commands a person runs
     slice_audio.py             generate spectrograms
+    sync_labeled_images.py     replace labeled images after regeneration
+    verify_spectrograms.py     prove stored images match the contract
     label_frontend.py          Streamlit labeling interface
     label_spectrograms.py      Matplotlib labeling interface
     build_manifest.py          validate labels and build reports
@@ -109,6 +112,7 @@ frog-bioacoustics/
 
   src/frog_classifier/         reusable Python package
     data/                      config, naming, manifests, folds, validation, and reports
+    preprocessing/             Mel rendering, noise floor, PNG encoding, and display colours
 
   tests/                       synthetic automated checks
   models/                      future generated model artifacts
@@ -120,6 +124,7 @@ frog-bioacoustics/
     architecture.md            implemented components and storage contracts
     workflow.md                detailed operating procedures
     superpowers/               approved design and implementation records
+    decisions/                 dated design decisions with their evidence
 ```
 
 The most important boundary is between `scripts/` and `src/`.
@@ -247,6 +252,7 @@ Use this guide when deciding which file to edit:
 | Command options or command orchestration | `scripts/` |
 | Reusable data behavior | `src/frog_classifier/data/` |
 | Audio and spectrogram defaults | `config/preprocessing.toml` |
+| Spectrogram rendering behavior | `src/frog_classifier/preprocessing/` |
 | Automated verification | `tests/` |
 | Beginner entry points | `README.md` or `docs/outline.md` |
 | Detailed operating instructions | `docs/workflow.md` |

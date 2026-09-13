@@ -24,13 +24,13 @@ uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file 
 
 ## Generate spectrograms
 
-`scripts/slice_audio.py` recursively discovers `.wav` and `.mp3` recordings, preserves their relative folder structure, and writes one axis-free PNG for every complete five-second window.
+`scripts/slice_audio.py` recursively discovers `.wav` and `.mp3` recordings, preserves their relative folder structure, and writes one 8-bit grayscale PNG for every complete five-second window.
 The configured contract uses 22,050 Hz mono audio, no overlap, 128 Mel bins, a 400 Hz to 4,000 Hz range, and drops the final partial window.
-The band was verified on September 13, 2026 by regenerating sampled spectrograms from raw audio and confirming they reproduce the existing PNGs exactly.
+Each image shows decibels above the recording's own per-band noise floor, taken at the 50th percentile over the whole file, with 0 dB to 30 dB mapped to black through white.
 The *Litoria aurea* call energy in the labeled examples sits between roughly 500 Hz and 2,500 Hz, so this band keeps the Mel resolution where the call lives.
-The machine-readable configuration is [config/preprocessing.toml](../config/preprocessing.toml).
-The configuration loader rejects non-finite floating-point values before they can reach librosa or Matplotlib.
-The slicer passes the tracked power, FFT, hop length, figure dimensions, DPI, and interpolation values explicitly to those libraries.
+The machine-readable configuration is [config/preprocessing.toml](../config/preprocessing.toml), and the command offers no overrides for it.
+The configuration loader rejects non-finite floating-point values and any schema other than version 2.
+The command overwrites existing images by name and deletes nothing.
 
 Process the default external recording root:
 
@@ -52,6 +52,31 @@ uv run python scripts/slice_audio.py --raw-root raw/ponds --out-root processed/p
 
 Each filename records the original recording stem and chunk start time.
 For example, `recording01_start30s.png` represents the five-second window beginning at 30 seconds in `recording01.wav`.
+
+## Replace labeled images after regeneration
+
+Regenerating the queue also recreates every labeled example under its original name.
+Run the sync command to move each fresh image over its labeled counterpart:
+
+```powershell
+uv run python scripts/sync_labeled_images.py
+```
+
+The command checks every labeled name first and changes nothing if any name fails to parse, has no fresh counterpart, or has more than one.
+Pass `--dry-run` to see how many images would be replaced.
+Pass `--labeled-root` and `--spectrogram-root` together when syncing pond data.
+
+## Verify stored spectrograms
+
+Prove that stored images match the raw audio and the tracked contract:
+
+```powershell
+uv run python scripts/verify_spectrograms.py --sample 50
+```
+
+The command draws a seeded sample from the labeled tree and from the queue, re-renders each recording, and prints `MATCH` or the reason for a mismatch per image.
+It exits non-zero on any mismatch.
+Pass `--all` to check every image, which renders every recording once.
 
 ## Apply labels
 
@@ -144,7 +169,7 @@ uv lock --check
 uv sync --frozen
 uv pip check
 uv run python -m unittest discover -s tests -v
-uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/label_spectrograms.py scripts/slice_audio.py scripts/train_baseline.py
+uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/label_spectrograms.py scripts/slice_audio.py scripts/sync_labeled_images.py scripts/train_baseline.py scripts/verify_spectrograms.py
 git diff --check
 ```
 

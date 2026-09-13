@@ -27,6 +27,8 @@ results/data_quality/        generated manifest validation reports
 models/                      future saved model artifacts
 results/analytics/           future inference and analysis outputs
 src/frog_classifier/data/    manifest, splitting, validation, reporting, and configuration package
+src/frog_classifier/preprocessing/   Mel rendering, per-recording noise floor, PNG encoding, display colours
+docs/decisions/              dated design decisions with their evidence
 ```
 
 Generated recordings, images, manifests, reports, models, and analytics are ignored by Git.
@@ -35,12 +37,30 @@ The manifest workflow reads labeled images directly, so materialized split direc
 
 ## Preprocessing contract
 
-[`config/preprocessing.toml`](../config/preprocessing.toml) is the machine-readable source of truth for the fixed-window audio, Mel-spectrogram rendering, and canonical class settings.
-The configuration declares 22,050 Hz mono audio, non-overlapping five-second windows, dropped incomplete final chunks, 128 Mel bins spanning 400 Hz to 4,000 Hz, axis-free PNG rendering, and the `litoria_aurea: 1` and `non_target: 0` mapping.
-The slicer takes every preprocessing value from this file and declares no defaults of its own.
-The band was corrected on September 13, 2026 after regeneration from raw audio proved the existing spectrograms were produced with 400 Hz to 4,000 Hz rather than the previously declared 0 Hz to 8,000 Hz.
+[`config/preprocessing.toml`](../config/preprocessing.toml) is the machine-readable source of truth for the fixed-window audio, Mel-spectrogram, normalization, rendering, and canonical class settings.
+Schema version 2 declares 22,050 Hz mono audio, non-overlapping five-second windows, dropped incomplete final chunks, 128 Mel bins spanning 400 Hz to 4,000 Hz, a per-recording noise floor at the 50th percentile, a 0 dB to 30 dB display range, 8-bit grayscale PNG output with the lowest band at the bottom, and the `litoria_aurea: 1` and `non_target: 0` mapping.
+The loader accepts only schema version 2 and tells the operator to regenerate spectrograms when it meets an earlier schema.
+The slicer takes every preprocessing value from this file and offers no command-line overrides.
 The data package reads the exact TOML bytes and includes their SHA-256 checksum in each generated manifest row.
 It rejects non-finite floating-point values before preprocessing begins.
+
+The band was corrected on September 13, 2026 after regeneration from raw audio proved the existing spectrograms were produced with 400 Hz to 4,000 Hz rather than the previously declared 0 Hz to 8,000 Hz.
+The noise-floor rendering was adopted the same day; the comparison and reasoning are in [the rendering decision](decisions/2026-09-13-spectrogram-rendering.md).
+
+## Spectrogram rendering
+
+`frog_classifier.preprocessing` renders one recording at a time.
+It loads the whole file as mono audio at the configured rate, computes the Mel power spectrogram of the entire file in absolute decibels, and takes the configured percentile of every band across all frames as that band's noise floor.
+Each complete five-second chunk is then converted from its own samples, the floor is subtracted per band, and decibels from `db_floor` to `db_ceiling` map linearly to grey levels 0 to 255 with clipping outside that range.
+Rows are flipped so the lowest band is the bottom row, and the array is written as a lossless 8-bit grayscale PNG with no metadata, so identical audio always yields identical bytes.
+Under the current contract every image is 216 pixels wide and 128 pixels tall.
+The labelers show these images through the viridis colour map for readability; storage stays grayscale.
+
+## Regeneration and verification
+
+`scripts/slice_audio.py` overwrites images by name and never deletes.
+`scripts/sync_labeled_images.py` moves each freshly rendered image over its labeled counterpart by name after all names are checked, so a label keeps its identity and the queue no longer holds a labeled example.
+`scripts/verify_spectrograms.py` re-renders a seeded sample, or every image with `--all`, from raw audio and compares bytes, which proves the stored images match the tracked contract.
 
 ## Human labeling
 

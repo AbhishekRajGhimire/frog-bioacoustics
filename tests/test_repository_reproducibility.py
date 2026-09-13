@@ -43,12 +43,20 @@ DATA_PACKAGE_MODULES = (
     "src/frog_classifier/data/validation.py",
 )
 
+PREPROCESSING_PACKAGE_MODULES = (
+    "src/frog_classifier/preprocessing/__init__.py",
+    "src/frog_classifier/preprocessing/display.py",
+    "src/frog_classifier/preprocessing/recording.py",
+    "src/frog_classifier/preprocessing/spectrogram.py",
+)
+
 OPERATIONAL_DOCUMENTS = (
     "README.md",
     "roadmap.md",
     "docs/outline.md",
     "docs/architecture.md",
     "docs/workflow.md",
+    "docs/decisions/2026-09-13-spectrogram-rendering.md",
 )
 
 OBSOLETE_PATHS = (
@@ -92,7 +100,9 @@ OPERATIONAL_TEXT_FILES = (
     "scripts/build_manifest.py",
     "scripts/label_spectrograms.py",
     "scripts/slice_audio.py",
+    "scripts/sync_labeled_images.py",
     "scripts/train_baseline.py",
+    "scripts/verify_spectrograms.py",
 )
 
 STALE_LAYOUT_TOKENS = ("Data/", "Data\\")
@@ -127,7 +137,12 @@ class RepositoryLayoutTests(unittest.TestCase):
                 self.assertFalse((REPO_ROOT / relative_path).exists())
 
     def test_project_navigation_files_are_complete_and_linked(self) -> None:
-        for relative_path in (*OPERATIONAL_DOCUMENTS, "config/preprocessing.toml", *DATA_PACKAGE_MODULES):
+        for relative_path in (
+            *OPERATIONAL_DOCUMENTS,
+            "config/preprocessing.toml",
+            *DATA_PACKAGE_MODULES,
+            *PREPROCESSING_PACKAGE_MODULES,
+        ):
             with self.subTest(required=relative_path):
                 self.assertTrue((REPO_ROOT / relative_path).is_file())
 
@@ -219,6 +234,18 @@ class OperationalDocumentationTests(unittest.TestCase):
                 self.assertIn(f"## Phase {phase}:", roadmap)
         self.assertIn("Status: Next", roadmap)
         self.assertIn("Status: Planned", roadmap)
+
+    def test_workflow_documents_every_operational_command(self) -> None:
+        workflow = (REPO_ROOT / "docs/workflow.md").read_text(encoding="utf-8")
+        for command in (
+            "uv run python scripts/slice_audio.py",
+            "uv run python scripts/sync_labeled_images.py",
+            "uv run python scripts/verify_spectrograms.py --sample 50",
+            "uv run python scripts/build_manifest.py",
+            "uv run python scripts/train_baseline.py",
+        ):
+            with self.subTest(command=command):
+                self.assertIn(command, workflow)
 
 
 if __name__ == "__main__":
