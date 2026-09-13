@@ -4,6 +4,7 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from frog_classifier.labeling.decisions import (
     LOG_COLUMNS,
@@ -46,6 +47,16 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(lines[0], list(LOG_COLUMNS))
         self.assertEqual(len(lines), 3)
 
+    def test_log_header_is_written_when_the_file_exists_but_is_empty(self) -> None:
+        self.log.path.parent.mkdir(parents=True, exist_ok=True)
+        self.log.path.write_text("", encoding="utf-8")
+
+        self.log.append("a_start0s", "unsure", "label")
+
+        with self.log.path.open(newline="", encoding="utf-8") as handle:
+            first_line = next(csv.reader(handle))
+        self.assertEqual(first_line, list(LOG_COLUMNS))
+
     def test_change_moves_between_labeled_folders_and_logs_change(self) -> None:
         move = record_decision(self.clip, "non_target", labeled_root=self.labeled_root, log=self.log)
 
@@ -63,6 +74,20 @@ class DecisionTests(unittest.TestCase):
         self.assertTrue(move.destination.is_file())
         self.assertEqual((row.decision, row.action), ("non_target", "confirm"))
 
+    def test_confirm_leaves_the_faint_flag_unrecorded_unless_reaffirmed(self) -> None:
+        move = record_decision(self.clip, "litoria_aurea", labeled_root=self.labeled_root, log=self.log, faint=True)
+
+        confirm_decision(move.destination, labeled_root=self.labeled_root, log=self.log)
+        confirm_decision(move.destination, labeled_root=self.labeled_root, log=self.log, faint=True)
+
+        self.assertEqual([row.faint for row in self.log.rows()], [True, None, True])
+
+    def test_faint_confirm_is_refused_outside_the_frog_folder(self) -> None:
+        move = record_decision(self.clip, "non_target", labeled_root=self.labeled_root, log=self.log)
+
+        with self.assertRaisesRegex(ValueError, "faint"):
+            confirm_decision(move.destination, labeled_root=self.labeled_root, log=self.log, faint=True)
+
     def test_moving_into_the_current_folder_is_refused(self) -> None:
         move = record_decision(self.clip, "non_target", labeled_root=self.labeled_root, log=self.log)
 
@@ -78,6 +103,14 @@ class DecisionTests(unittest.TestCase):
         self.assertTrue(self.clip.exists())
         self.assertEqual(existing.read_bytes(), b"existing")
         self.assertFalse(self.log.path.exists())
+
+    def test_log_failure_moves_the_clip_back(self) -> None:
+        with mock.patch.object(self.log, "append", side_effect=OSError("locked")):
+            with self.assertRaises(OSError):
+                record_decision(self.clip, "unsure", labeled_root=self.labeled_root, log=self.log)
+
+        self.assertTrue(self.clip.is_file())
+        self.assertFalse((self.labeled_root / "unsure" / self.clip.name).exists())
 
     def test_faint_only_applies_to_frogs(self) -> None:
         with self.assertRaisesRegex(ValueError, "faint"):
@@ -97,6 +130,7 @@ class DecisionTests(unittest.TestCase):
         self.assertFalse(move.destination.exists())
         last = self.log.rows()[-1]
         self.assertEqual((last.decision, last.action), ("queue", "undo"))
+        self.assertIsNone(last.faint)
 
     def test_undo_of_a_change_logs_the_folder_it_returned_to(self) -> None:
         first = record_decision(self.clip, "non_target", labeled_root=self.labeled_root, log=self.log)

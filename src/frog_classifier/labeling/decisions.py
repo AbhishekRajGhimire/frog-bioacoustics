@@ -22,7 +22,7 @@ class DecisionRow:
     example_id: str
     decision: str
     action: str
-    faint: bool
+    faint: bool | None
     decided_at: str
 
 
@@ -45,15 +45,16 @@ class DecisionLog:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def append(self, example_id: str, decision: str, action: str, *, faint: bool = False) -> DecisionRow:
+    def append(self, example_id: str, decision: str, action: str, *, faint: bool | None = None) -> DecisionRow:
         row = DecisionRow(example_id, decision, action, faint, _utc_now())
-        is_new = not self.path.exists()
+        is_new = not self.path.exists() or self.path.stat().st_size == 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        faint_cell = "1" if row.faint is True else "0" if row.faint is False else ""
         with self.path.open("a", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
             if is_new:
                 writer.writerow(LOG_COLUMNS)
-            writer.writerow([row.example_id, row.decision, row.action, "1" if row.faint else "0", row.decided_at])
+            writer.writerow([row.example_id, row.decision, row.action, faint_cell, row.decided_at])
         return row
 
     def rows(self) -> list[DecisionRow]:
@@ -65,7 +66,7 @@ class DecisionLog:
                     record["example_id"],
                     record["decision"],
                     record["action"],
-                    record["faint"] == "1",
+                    {"1": True, "0": False}.get(record["faint"]),
                     record["decided_at"],
                 )
                 for record in csv.DictReader(handle)
@@ -106,7 +107,13 @@ def record_decision(
         raise FileExistsError(f"refusing to overwrite {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     os.replace(image_path, destination)
-    log.append(key.example_id, decision, "label" if origin is None else "change", faint=faint)
+    try:
+        log.append(key.example_id, decision, "label" if origin is None else "change", faint=faint)
+    except OSError:
+        # Keep the folders and the log consistent: a move without a row is
+        # invisible to the audit, so put the clip back before failing.
+        os.replace(destination, image_path)
+        raise
     return Move(source=image_path, destination=destination)
 
 
@@ -115,6 +122,7 @@ def confirm_decision(
     *,
     labeled_root: Path,
     log: DecisionLog,
+    faint: bool | None = None,
     chunk_seconds: int = 5,
 ) -> DecisionRow:
     """Log that an audited clip keeps its current folder. Moves nothing."""
@@ -122,7 +130,9 @@ def confirm_decision(
     origin = current_folder(image_path, labeled_root)
     if origin is None:
         raise ValueError("only a clip inside the labeled folders can be confirmed")
-    return log.append(key.example_id, origin, "confirm")
+    if faint and origin != "litoria_aurea":
+        raise ValueError("faint applies to litoria_aurea decisions only")
+    return log.append(key.example_id, origin, "confirm", faint=faint)
 
 
 def undo_move(
@@ -140,7 +150,7 @@ def undo_move(
     move.source.parent.mkdir(parents=True, exist_ok=True)
     os.replace(move.destination, move.source)
     key = parse_example_filename(move.source, chunk_seconds=chunk_seconds)
-    log.append(key.example_id, current_folder(move.source, labeled_root) or "queue", "undo")
+    log.append(key.example_id, current_folder(move.source, labeled_root) or "queue", "undo", faint=None)
     return move.source
 
 
@@ -149,7 +159,11 @@ def summarize_labels(labeled_root: Path, *, chunk_seconds: int = 5) -> dict[str,
     summary: dict[str, ClassProgress] = {}
     for folder in DECISION_FOLDERS:
         directory = labeled_root / folder
-        paths = sorted(directory.glob("*.png")) if directory.is_dir() else []
+        paths = (
+            sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.casefold() == ".png")
+            if directory.is_dir()
+            else []
+        )
         recordings: set[str] = set()
         for path in paths:
             try:
