@@ -36,7 +36,9 @@ The manifest workflow reads labeled images directly, so materialized split direc
 ## Preprocessing contract
 
 [`config/preprocessing.toml`](../config/preprocessing.toml) is the machine-readable source of truth for the fixed-window audio, Mel-spectrogram rendering, and canonical class settings.
-The configuration declares 22,050 Hz mono audio, non-overlapping five-second windows, dropped incomplete final chunks, 128 Mel bins, axis-free PNG rendering, and the `litoria_aurea: 1` and `non_target: 0` mapping.
+The configuration declares 22,050 Hz mono audio, non-overlapping five-second windows, dropped incomplete final chunks, 128 Mel bins spanning 400 Hz to 4,000 Hz, axis-free PNG rendering, and the `litoria_aurea: 1` and `non_target: 0` mapping.
+The slicer takes every preprocessing value from this file and declares no defaults of its own.
+The band was corrected on September 13, 2026 after regeneration from raw audio proved the existing spectrograms were produced with 400 Hz to 4,000 Hz rather than the previously declared 0 Hz to 8,000 Hz.
 The data package reads the exact TOML bytes and includes their SHA-256 checksum in each generated manifest row.
 It rejects non-finite floating-point values before preprocessing begins.
 

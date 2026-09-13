@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import sys
 import tempfile
@@ -17,6 +18,22 @@ SCRIPT_PATH = REPO_ROOT / "scripts" / "slice_audio.py"
 
 
 class SliceAudioPreprocessingIntegrationTests(unittest.TestCase):
+    def test_slicer_config_has_no_preprocessing_defaults(self) -> None:
+        """The tracked TOML is the only source of preprocessing values.
+
+        Stale dataclass defaults once diverged from the command-line defaults
+        and hid which frequency band actually produced the spectrograms.
+        """
+        module = self._load_module()
+        fields = dataclasses.fields(module.Config)
+        defaulted = sorted(
+            field.name
+            for field in fields
+            if field.default is not dataclasses.MISSING
+            or field.default_factory is not dataclasses.MISSING
+        )
+        self.assertEqual(defaulted, [])
+
     def test_tracked_defaults_reach_librosa_and_matplotlib_exactly(self) -> None:
         module = self._load_module()
         self.assertTrue(
@@ -31,8 +48,8 @@ class SliceAudioPreprocessingIntegrationTests(unittest.TestCase):
         self.assertEqual(defaults.sample_rate, 22050)
         self.assertEqual(defaults.chunk_seconds, 5)
         self.assertEqual(defaults.n_mels, 128)
-        self.assertEqual(defaults.fmin, 0)
-        self.assertEqual(defaults.fmax, 8000)
+        self.assertEqual(defaults.fmin, 400)
+        self.assertEqual(defaults.fmax, 4000)
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -82,8 +99,8 @@ class SliceAudioPreprocessingIntegrationTests(unittest.TestCase):
             self.assertEqual(mel_kwargs, {
                 "sr": 22050,
                 "n_mels": 128,
-                "fmin": 0,
-                "fmax": 8000,
+                "fmin": 400,
+                "fmax": 4000,
                 "power": 2.0,
                 "n_fft": 2048,
                 "hop_length": 512,

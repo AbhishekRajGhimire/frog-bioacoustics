@@ -25,7 +25,9 @@ uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file 
 ## Generate spectrograms
 
 `scripts/slice_audio.py` recursively discovers `.wav` and `.mp3` recordings, preserves their relative folder structure, and writes one axis-free PNG for every complete five-second window.
-The configured contract uses 22,050 Hz mono audio, no overlap, 128 Mel bins, a 0 Hz to 8,000 Hz range, and drops the final partial window.
+The configured contract uses 22,050 Hz mono audio, no overlap, 128 Mel bins, a 400 Hz to 4,000 Hz range, and drops the final partial window.
+The band was verified on September 13, 2026 by regenerating sampled spectrograms from raw audio and confirming they reproduce the existing PNGs exactly.
+The *Litoria aurea* call energy in the labeled examples sits between roughly 500 Hz and 2,500 Hz, so this band keeps the Mel resolution where the call lives.
 The machine-readable configuration is [config/preprocessing.toml](../config/preprocessing.toml).
 The configuration loader rejects non-finite floating-point values before they can reach librosa or Matplotlib.
 The slicer passes the tracked power, FFT, hop length, figure dimensions, DPI, and interpolation values explicitly to those libraries.

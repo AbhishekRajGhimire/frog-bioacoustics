@@ -41,28 +41,27 @@ SUPPORTED_EXTS = {".wav", ".mp3"}
 
 @dataclass(frozen=True)
 class Config:
-    """Pipeline settings (all together so it's easy to tweak)."""
+    """Resolved run settings.
+
+    Every preprocessing value comes from config/preprocessing.toml through the
+    command-line parser. The dataclass deliberately has no defaults so a stale
+    value here can never diverge from the tracked contract again.
+    """
 
     raw_root: Path
     out_root: Path
-    sample_rate: int = 22050
-    chunk_seconds: int = 5
-    n_mels: int = 128
-    fmin: int = 400
-    fmax: int = 4000
-    power: float = 2.0
-    n_fft: int = 2048
-    hop_length: int = 512
-    figure_width_inches: float = 3.2
-    figure_height_inches: float = 3.2
-    dpi: int = 150
-    interpolation: str = "nearest"
-    # Frequency range considered for the Mel-spectrogram.
-    #
-    # Note: For Litoria aurea (Green and Golden Bell Frog), you may get cleaner
-    # spectrograms by focusing on a narrower band, e.g.:
-    #   --fmin 400 --fmax 4000
-    # This reduces low-frequency wind/water thumps and high-frequency insect noise.
+    sample_rate: int
+    chunk_seconds: int
+    n_mels: int
+    fmin: int
+    fmax: int
+    power: float
+    n_fft: int
+    hop_length: int
+    figure_width_inches: float
+    figure_height_inches: float
+    dpi: int
+    interpolation: str
 
 
 def iter_audio_files_os_walk(raw_root: Path) -> Iterable[Path]:

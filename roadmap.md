@@ -100,6 +100,11 @@ Verified on July 22, 2026:
 - The strict baseline produced train, validation, and test metrics without a fallback or missing-partition path.
 - The 13 positive examples leave only two or three positives in each fold, so grouped validation metrics remain statistically unstable until Phase 3 expands positive label coverage.
 
+Corrected on September 13, 2026:
+
+- The preprocessing configuration previously declared a 0 Hz to 8,000 Hz Mel band, but regenerating sampled spectrograms from raw audio proved every existing PNG was produced with 400 Hz to 4,000 Hz.
+- The configuration now declares 400 Hz to 4,000 Hz, so the checksums above are superseded and the manifest must be regenerated before training.
+
 ## Phase 3: Purposeful label expansion
 
 Status: Next

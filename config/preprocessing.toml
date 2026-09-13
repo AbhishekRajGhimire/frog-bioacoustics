@@ -10,8 +10,8 @@ drop_incomplete_final_chunk = true
 [spectrogram]
 kind = "mel"
 n_mels = 128
-fmin_hz = 0
-fmax_hz = 8000
+fmin_hz = 400
+fmax_hz = 4000
 power = 2.0
 n_fft = 2048
 hop_length = 512
