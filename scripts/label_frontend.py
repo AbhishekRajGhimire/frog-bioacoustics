@@ -159,7 +159,7 @@ def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: 
             )
             st.session_state["last_move"] = (clip_index, move)
             if origin is None:
-                st.session_state["pool"] -= 1
+                st.session_state["pool"] = st.session_state.get("pool", 1) - 1
     except (ValueError, OSError) as error:
         st.session_state["error"] = str(error)
         return
@@ -212,6 +212,9 @@ def main() -> None:
 
     queue: list[Path] = st.session_state["queue"]
     index: int = st.session_state["index"]
+    if "pool" not in st.session_state:
+        # A session started before the counter existed: count once, then keep in step.
+        st.session_state["pool"] = len(_pngs_under(spectrogram_root)) if mode == MODE_LABEL else len(_labeled_pngs(labeled_root))
 
     progress = summarize_labels(labeled_root, chunk_seconds=chunk_seconds)
     columns = st.columns(5)
@@ -290,7 +293,7 @@ def main() -> None:
                     try:
                         returned = undo_move(move, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
                         if current_folder(returned, labeled_root) is None:
-                            st.session_state["pool"] += 1
+                            st.session_state["pool"] = st.session_state.get("pool", 0) + 1
                         st.session_state["last_move"] = None
                         st.session_state["index"] = clip_index
                         st.session_state.pop("error", None)
