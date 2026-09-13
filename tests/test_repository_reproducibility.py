@@ -51,6 +51,13 @@ PREPROCESSING_PACKAGE_MODULES = (
     "src/frog_classifier/preprocessing/spectrogram.py",
 )
 
+LABELING_PACKAGE_MODULES = (
+    "src/frog_classifier/labeling/__init__.py",
+    "src/frog_classifier/labeling/audio.py",
+    "src/frog_classifier/labeling/decisions.py",
+    "src/frog_classifier/labeling/queue.py",
+)
+
 OPERATIONAL_DOCUMENTS = (
     "README.md",
     "roadmap.md",
@@ -69,6 +76,7 @@ OBSOLETE_PATHS = (
     "dataset/val/non_target/.gitkeep",
     "dataset/test/litoria_aurea/.gitkeep",
     "dataset/test/non_target/.gitkeep",
+    "scripts/label_spectrograms.py",
 )
 
 RUNTIME_DEPENDENCIES = {
@@ -99,7 +107,6 @@ OPERATIONAL_TEXT_FILES = (
     "docs/architecture.md",
     "docs/workflow.md",
     "scripts/build_manifest.py",
-    "scripts/label_spectrograms.py",
     "scripts/slice_audio.py",
     "scripts/sync_labeled_images.py",
     "scripts/train_baseline.py",
@@ -143,6 +150,7 @@ class RepositoryLayoutTests(unittest.TestCase):
             "config/preprocessing.toml",
             *DATA_PACKAGE_MODULES,
             *PREPROCESSING_PACKAGE_MODULES,
+            *LABELING_PACKAGE_MODULES,
         ):
             with self.subTest(required=relative_path):
                 self.assertTrue((REPO_ROOT / relative_path).is_file())
