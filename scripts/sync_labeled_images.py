@@ -57,15 +57,25 @@ def plan_sync(
         if path.is_file():
             fresh_by_name[path.name].append(path)
 
+    labeled_files = [path for path in labeled_root.rglob("*.png") if path.is_file()]
+    labeled_by_name: dict[str, list[Path]] = defaultdict(list)
+    for path in labeled_files:
+        labeled_by_name[path.name].append(path)
+
     replacements: list[tuple[Path, Path]] = []
     issues: list[str] = []
-    for labeled in sorted(labeled_root.rglob("*.png")):
-        if not labeled.is_file():
-            continue
+    for labeled in sorted(labeled_files):
         try:
             parse_example_filename(labeled, chunk_seconds=chunk_seconds)
         except ExampleNameError as error:
             issues.append(f"[invalid_example_filename] {labeled}: {error}")
+            continue
+        duplicates = labeled_by_name[labeled.name]
+        if len(duplicates) > 1:
+            issues.append(
+                f"[duplicate_labeled_name] {labeled}: {len(duplicates)} labeled images "
+                "share this name"
+            )
             continue
         candidates = sorted(fresh_by_name.get(labeled.name, []))
         if not candidates:

@@ -73,6 +73,17 @@ class SyncLabeledImagesTests(unittest.TestCase):
         self.assertEqual(self.labeled.read_bytes(), b"old")
         self.assertTrue(self.fresh.exists())
 
+    def test_duplicate_labeled_names_fail_without_touching_anything(self) -> None:
+        duplicate = self._write(self.labeled_root / "non_target" / "rec_start5s.png", b"other")
+
+        result, output = self._run()
+
+        self.assertEqual(result, 2)
+        self.assertIn("[duplicate_labeled_name]", output)
+        self.assertEqual(self.labeled.read_bytes(), b"old")
+        self.assertEqual(duplicate.read_bytes(), b"other")
+        self.assertTrue(self.fresh.exists())
+
     def test_nested_roots_are_rejected(self) -> None:
         result, output = self._run(
             "--labeled-root", str(self.spectrogram_root / "site"),
