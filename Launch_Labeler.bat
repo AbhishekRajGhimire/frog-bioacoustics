@@ -1,5 +1,5 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 
 REM Frog Spectrogram Labeler launcher (Windows)
 REM - Double-click to run
@@ -20,9 +20,9 @@ set PYEXE=%VENV_DIR%\Scripts\python.exe
 
 REM Pick Python 3.13 if the venv does not exist yet.
 set SYS_PY=
-where py >nul 2>nul && py -3.13 -c "import sys; raise SystemExit(sys.version_info[:2] != (3, 13))" >nul 2>nul && set SYS_PY=py -3.13
+where py >nul 2>nul && py -3.13 -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul && set SYS_PY=py -3.13
 if "%SYS_PY%"=="" (
-  where python >nul 2>nul && python -c "import sys; raise SystemExit(sys.version_info[:2] != (3, 13))" >nul 2>nul && set SYS_PY=python
+  where python >nul 2>nul && python -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul && set SYS_PY=python
 )
 
 if not exist "%PYEXE%" (
@@ -42,7 +42,7 @@ if not exist "%PYEXE%" (
   )
 )
 
-"%PYEXE%" -c "import sys; raise SystemExit(sys.version_info[:2] != (3, 13))" >nul 2>nul
+"%PYEXE%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] The existing .venv does not use Python 3.13.
   echo Remove .venv, then run this launcher again to recreate it.

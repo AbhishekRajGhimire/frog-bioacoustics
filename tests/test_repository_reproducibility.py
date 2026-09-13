@@ -216,6 +216,10 @@ class DependencyMetadataTests(unittest.TestCase):
         self.assertIn("py -3.13", launcher)
         self.assertIn("Python 3.13", launcher)
         self.assertIn("requirements_labeler.txt", launcher)
+        # Delayed expansion strips "!" from inline Python, which once turned the
+        # version probe into a SyntaxError and rejected a valid 3.13 venv.
+        self.assertNotIn("enabledelayedexpansion", launcher)
+        self.assertNotIn("!=", launcher)
 
 
 class OperationalDocumentationTests(unittest.TestCase):
