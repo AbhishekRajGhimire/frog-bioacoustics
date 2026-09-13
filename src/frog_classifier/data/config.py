@@ -94,6 +94,12 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise ConfigError(f"invalid preprocessing TOML: {error}") from error
 
+    if "schema_version" in data and _value(data, "schema_version", int) != SUPPORTED_SCHEMA_VERSION:
+        raise ConfigError(
+            f"schema_version must be {SUPPORTED_SCHEMA_VERSION}; spectrograms rendered "
+            "under an earlier schema must be regenerated"
+        )
+
     expected_top_level = {
         "schema_version", "audio", "spectrogram", "normalization", "rendering", "classes",
     }
@@ -103,11 +109,6 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
         raise ConfigError(
             f"invalid top-level keys: {sorted(data)}; "
             f"missing: {missing}; unexpected: {unexpected}"
-        )
-    if _value(data, "schema_version", int) != SUPPORTED_SCHEMA_VERSION:
-        raise ConfigError(
-            f"schema_version must be {SUPPORTED_SCHEMA_VERSION}; spectrograms rendered "
-            "under an earlier schema must be regenerated"
         )
 
     audio_data = _section(data, "audio", {

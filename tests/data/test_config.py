@@ -43,6 +43,38 @@ non_target = 0
 '''
 
 
+SCHEMA_ONE_CONFIG = b'''schema_version = 1
+
+[audio]
+sample_rate_hz = 22050
+mono = true
+chunk_seconds = 5
+overlap_seconds = 0
+drop_incomplete_final_chunk = true
+
+[spectrogram]
+kind = "mel"
+n_mels = 128
+fmin_hz = 400
+fmax_hz = 4000
+power = 2.0
+n_fft = 2048
+hop_length = 512
+
+[rendering]
+format = "png"
+figure_width_inches = 3.2
+figure_height_inches = 3.2
+dpi = 150
+axis_visible = false
+interpolation = "nearest"
+
+[classes]
+litoria_aurea = 1
+non_target = 0
+'''
+
+
 class LoadPreprocessingConfigTests(unittest.TestCase):
     def load(self, content: bytes):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -79,7 +111,7 @@ class LoadPreprocessingConfigTests(unittest.TestCase):
 
     def test_rejects_schema_version_one_and_asks_for_regeneration(self) -> None:
         with self.assertRaisesRegex(ConfigError, "regenerated"):
-            self.load(VALID_CONFIG.replace(b"schema_version = 2", b"schema_version = 1"))
+            self.load(SCHEMA_ONE_CONFIG)
 
     def test_rejects_missing_normalization_section(self) -> None:
         invalid_config = VALID_CONFIG.replace(
