@@ -9,6 +9,8 @@ from pathlib import Path
 from frog_classifier.data.manifest import HOLDING_DIRECTORIES
 from frog_classifier.data.naming import ExampleNameError, parse_example_filename
 
+from .audio import find_recording
+
 
 CLASS_FOLDERS = ("litoria_aurea", "non_target")
 HOLDING_FOLDER = HOLDING_DIRECTORIES[0]
@@ -36,6 +38,14 @@ class Move:
 class ClassProgress:
     clips: int
     recordings: int
+
+
+@dataclass(frozen=True)
+class LabeledClip:
+    path: Path
+    folder: str
+    faint: bool | None
+    decided_at: str | None
 
 
 class DecisionLog:
@@ -172,6 +182,89 @@ def summarize_labels(labeled_root: Path, *, chunk_seconds: int = 5) -> dict[str,
                 continue
         summary[folder] = ClassProgress(clips=len(paths), recordings=len(recordings))
     return summary
+
+
+def latest_decisions(
+    labeled_root: Path,
+    log: DecisionLog,
+    *,
+    chunk_seconds: int = 5,
+) -> list[LabeledClip]:
+    """Every labeled clip, newest decision first; clips the log never saw come last.
+
+    The folder is the truth for a clip's label. The log supplies when it was
+    last decided and, for frog clips, whether it was tagged faint.
+    """
+    last_row: dict[str, tuple[int, DecisionRow]] = {}
+    faint_by_example: dict[str, bool] = {}
+    for position, row in enumerate(log.rows()):
+        last_row[row.example_id] = (position, row)
+        if row.decision != "litoria_aurea":
+            faint_by_example.pop(row.example_id, None)
+        elif row.faint is not None:
+            faint_by_example[row.example_id] = row.faint
+
+    found: list[tuple[int, str, LabeledClip]] = []
+    for folder in DECISION_FOLDERS:
+        directory = labeled_root / folder
+        if not directory.is_dir():
+            continue
+        for path in directory.iterdir():
+            if not (path.is_file() and path.suffix.casefold() == ".png"):
+                continue
+            try:
+                key = parse_example_filename(path, chunk_seconds=chunk_seconds)
+            except ExampleNameError:
+                continue
+            position, row = last_row.get(key.example_id, (-1, None))
+            faint = faint_by_example.get(key.example_id) if folder == "litoria_aurea" else None
+            found.append((
+                position,
+                path.name,
+                LabeledClip(path, folder, faint, row.decided_at if row is not None else None),
+            ))
+    found.sort(key=lambda item: (-item[0], item[1]))
+    return [clip for _, _, clip in found]
+
+
+def return_to_queue(
+    image_path: Path,
+    *,
+    labeled_root: Path,
+    spectrogram_root: Path,
+    raw_root: Path,
+    log: DecisionLog,
+    chunk_seconds: int = 5,
+) -> Move:
+    """Send any labeled clip back to where the slicer put it. Never overwrites.
+
+    The log does not store a clip's queue location, but the queue mirrors the
+    raw tree, so the recording's folder under raw_root gives it back.
+    """
+    key = parse_example_filename(image_path, chunk_seconds=chunk_seconds)
+    if current_folder(image_path, labeled_root) is None:
+        raise ValueError("only a clip inside the labeled folders can be returned to the queue")
+    recording = find_recording(raw_root, key.recording_id)
+    if recording is None:
+        raise ValueError(
+            f"the recording for {key.example_id} was not found, or is ambiguous, under {raw_root}"
+        )
+    try:
+        relative_folder = recording.resolve().parent.relative_to(raw_root.resolve())
+    except ValueError:
+        raise ValueError(f"the recording for {key.example_id} lies outside {raw_root}") from None
+    destination = spectrogram_root / relative_folder / image_path.name
+    if destination.exists():
+        raise FileExistsError(f"refusing to overwrite {destination}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(image_path, destination)
+    try:
+        log.append(key.example_id, "queue", "return")
+    except OSError:
+        # Same rule as record_decision: a move without a row is invisible.
+        os.replace(destination, image_path)
+        raise
+    return Move(source=image_path, destination=destination)
 
 
 def _utc_now() -> str:

@@ -11,7 +11,9 @@ from frog_classifier.labeling.decisions import (
     DecisionLog,
     confirm_decision,
     current_folder,
+    latest_decisions,
     record_decision,
+    return_to_queue,
     summarize_labels,
     undo_move,
 )
@@ -152,6 +154,78 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual((summary["litoria_aurea"].clips, summary["litoria_aurea"].recordings), (2, 1))
         self.assertEqual((summary["non_target"].clips, summary["non_target"].recordings), (1, 1))
         self.assertEqual((summary["unsure"].clips, summary["unsure"].recordings), (1, 1))
+
+    def test_latest_decisions_lists_labeled_clips_newest_first(self) -> None:
+        second = self._write(self.queue_root / "site" / "20220102_230000_start10s.png")
+        record_decision(self.clip, "litoria_aurea", labeled_root=self.labeled_root, log=self.log, faint=True)
+        record_decision(second, "non_target", labeled_root=self.labeled_root, log=self.log)
+
+        clips = latest_decisions(self.labeled_root, self.log)
+
+        self.assertEqual([clip.path.name for clip in clips], [second.name, self.clip.name])
+        self.assertEqual([clip.folder for clip in clips], ["non_target", "litoria_aurea"])
+        self.assertEqual([clip.faint for clip in clips], [None, True])
+        self.assertTrue(all(clip.decided_at for clip in clips))
+
+    def test_latest_decisions_follows_a_change_and_keeps_unlogged_clips_last(self) -> None:
+        unlogged = self._write(self.labeled_root / "non_target" / "20220103_010000_start0s.png")
+        move = record_decision(self.clip, "non_target", labeled_root=self.labeled_root, log=self.log)
+        record_decision(move.destination, "litoria_aurea", labeled_root=self.labeled_root, log=self.log)
+
+        clips = latest_decisions(self.labeled_root, self.log)
+
+        self.assertEqual([clip.path.name for clip in clips], [self.clip.name, unlogged.name])
+        self.assertEqual((clips[0].folder, clips[0].faint), ("litoria_aurea", False))
+        self.assertIsNone(clips[1].decided_at)
+
+    def test_return_to_queue_restores_the_mirrored_location_and_logs_return(self) -> None:
+        raw_root = self.root / "raw"
+        self._write(raw_root / "site" / "20220101_220000.wav", b"")
+        move = record_decision(self.clip, "non_target", labeled_root=self.labeled_root, log=self.log)
+
+        returned = return_to_queue(
+            move.destination,
+            labeled_root=self.labeled_root,
+            spectrogram_root=self.queue_root,
+            raw_root=raw_root,
+            log=self.log,
+        )
+
+        self.assertEqual(returned.destination, self.queue_root / "site" / self.clip.name)
+        self.assertTrue(returned.destination.is_file())
+        self.assertFalse(move.destination.exists())
+        last = self.log.rows()[-1]
+        self.assertEqual((last.decision, last.action, last.faint), ("queue", "return", None))
+
+    def test_return_to_queue_never_overwrites_a_queued_clip(self) -> None:
+        raw_root = self.root / "raw"
+        self._write(raw_root / "site" / "20220101_220000.wav", b"")
+        move = record_decision(self.clip, "non_target", labeled_root=self.labeled_root, log=self.log)
+        blocker = self._write(self.queue_root / "site" / self.clip.name, b"already queued")
+
+        with self.assertRaises(FileExistsError):
+            return_to_queue(
+                move.destination, labeled_root=self.labeled_root, spectrogram_root=self.queue_root, raw_root=raw_root, log=self.log,
+            )
+        self.assertTrue(move.destination.is_file())
+        self.assertEqual(blocker.read_bytes(), b"already queued")
+
+    def test_return_to_queue_needs_the_recording_and_a_labeled_clip(self) -> None:
+        raw_root = self.root / "raw"
+        raw_root.mkdir()
+        move = record_decision(self.clip, "unsure", labeled_root=self.labeled_root, log=self.log)
+
+        with self.assertRaisesRegex(ValueError, "recording"):
+            return_to_queue(
+                move.destination, labeled_root=self.labeled_root, spectrogram_root=self.queue_root, raw_root=raw_root, log=self.log,
+            )
+        self.assertTrue(move.destination.is_file())
+
+        outsider = self._write(self.queue_root / "site" / "20220105_220000_start0s.png")
+        with self.assertRaisesRegex(ValueError, "labeled"):
+            return_to_queue(
+                outsider, labeled_root=self.labeled_root, spectrogram_root=self.queue_root, raw_root=raw_root, log=self.log,
+            )
 
     def _write(self, path: Path, content: bytes = b"png") -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
