@@ -72,7 +72,7 @@ It shows a spectrogram through the viridis colour map with its five-second audio
 In label mode the queue comes from `frog_classifier.labeling.queue`: night clips (19:00 to 06:59) shuffled with a seed, at most five per recording per session, with one daytime clip for every nine night clips.
 In audit mode the queue is the labeled folders in the same order without the per-recording cap, the current class is shown, pressing it confirms, and pressing another class moves the clip.
 Frog, Frog faint, Background, and Unsure move the PNG into `labeled/litoria_aurea`, `labeled/non_target`, or `labeled/unsure` through `frog_classifier.labeling.decisions`, which refuses to overwrite and appends one row per press to `labeled/decisions.csv` with the resulting folder, the action (`label`, `confirm`, `change`, or `undo`), the faint flag when a Frog button set it and an empty cell otherwise, and a UTC timestamp.
-Skip leaves no record, and Undo reverts only the last move of the session.
+Skip leaves no record, and Undo steps back through the session's moves one clip per press, newest first, for up to the last 20 moves.
 The manifest builder skips `labeled/unsure/`, so unsure clips never enter training.
 Changing any path, seed, limit, or cap in the labeler rebuilds its queue, so a decision always applies to the roots shown on screen.
 

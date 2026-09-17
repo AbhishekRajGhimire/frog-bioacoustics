@@ -141,9 +141,25 @@ def _labeled_pngs(labeled_root: Path) -> list[Path]:
     return clips
 
 
+UNDO_DEPTH = 20
+
+
 def _reset_session() -> None:
-    for key in ("queue", "index", "last_move", "error"):
+    for key in ("queue", "index", "last_move", "history", "error"):
         st.session_state.pop(key, None)
+
+
+def _history() -> list:
+    """The session's undoable moves as (clip index, move), newest last.
+
+    A session that started before multi-level undo existed carries a single
+    last_move entry; adopt it so a rerun never loses the ability to undo.
+    """
+    history = st.session_state.setdefault("history", [])
+    legacy = st.session_state.pop("last_move", None)
+    if legacy is not None and not history:
+        history.append(legacy)
+    return history
 
 
 def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: DecisionLog, chunk_seconds: int) -> None:
@@ -151,13 +167,14 @@ def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: 
     try:
         if origin == decision:
             confirm_decision(clip, labeled_root=labeled_root, log=log, faint=True if faint else None, chunk_seconds=chunk_seconds)
-            st.session_state["last_move"] = None
         else:
             clip_index = st.session_state["index"]
             move = record_decision(
                 clip, decision, labeled_root=labeled_root, log=log, faint=faint, chunk_seconds=chunk_seconds,
             )
-            st.session_state["last_move"] = (clip_index, move)
+            history = _history()
+            history.append((clip_index, move))
+            del history[:-UNDO_DEPTH]
             if origin is None:
                 st.session_state["pool"] = st.session_state.get("pool", 1) - 1
     except (ValueError, OSError) as error:
@@ -208,7 +225,7 @@ def main() -> None:
         queue = build_queue(source, seed=seed, chunk_seconds=chunk_seconds, per_recording_cap=per_recording_cap)
         if limit > 0:
             queue = queue[:limit]
-        st.session_state.update(queue=queue, index=0, last_move=None, pool=len(source))
+        st.session_state.update(queue=queue, index=0, history=[], pool=len(source))
 
     queue: list[Path] = st.session_state["queue"]
     index: int = st.session_state["index"]
@@ -284,21 +301,19 @@ def main() -> None:
                 st.session_state["index"] += 1
                 st.rerun()
         with right:
-            if st.button("Undo last move", use_container_width=True):
-                last_move = st.session_state.get("last_move")
-                if last_move is None:
-                    st.session_state["error"] = "Nothing to undo."
-                else:
-                    clip_index, move = last_move
-                    try:
-                        returned = undo_move(move, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
-                        if current_folder(returned, labeled_root) is None:
-                            st.session_state["pool"] = st.session_state.get("pool", 0) + 1
-                        st.session_state["last_move"] = None
-                        st.session_state["index"] = clip_index
-                        st.session_state.pop("error", None)
-                    except (ValueError, OSError) as error:
-                        st.session_state["error"] = str(error)
+            history = _history()
+            undo_help = f"Steps back one clip per press, newest first. {len(history)} of the last {UNDO_DEPTH} moves can be undone."
+            if st.button("Undo last move", use_container_width=True, disabled=not history, help=undo_help):
+                clip_index, move = history[-1]
+                try:
+                    returned = undo_move(move, labeled_root=labeled_root, log=log, chunk_seconds=chunk_seconds)
+                    history.pop()
+                    if current_folder(returned, labeled_root) is None:
+                        st.session_state["pool"] = st.session_state.get("pool", 0) + 1
+                    st.session_state["index"] = clip_index
+                    st.session_state.pop("error", None)
+                except (ValueError, OSError) as error:
+                    st.session_state["error"] = str(error)
                 st.rerun()
         st.divider()
         if st.button("End session", use_container_width=True):

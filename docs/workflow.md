@@ -98,7 +98,7 @@ The per-recording cap applies to label mode only, so an audit session re-hears e
 
 Buttons: Frog, Frog faint, Background, Unsure, Skip, and Undo.
 Skip leaves no record.
-Undo reverts only the last move of the session.
+Undo steps back through the session's moves one clip per press, newest first, for up to the last 20 moves.
 Every other press appends one row to `labeled/decisions.csv`.
 
 ### Labeling policy
