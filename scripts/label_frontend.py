@@ -13,7 +13,9 @@ from frog_classifier.labeling import (
     confirm_decision,
     current_folder,
     find_or_export_chunk,
+    latest_decisions,
     record_decision,
+    return_to_queue,
     summarize_labels,
     undo_move,
 )
@@ -23,6 +25,10 @@ from frog_classifier.preprocessing.display import colorize
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODE_LABEL = "Label new clips"
 MODE_AUDIT = "Audit labeled clips"
+MODE_HISTORY = "Review history"
+HISTORY_PAGE = 40
+HISTORY_FILTERS = {"All": None, "Frog": "litoria_aurea", "Background": "non_target", "Unsure": "unsure"}
+FOLDER_TITLES = {"litoria_aurea": "Frog", "non_target": "Background", "unsure": "Unsure"}
 # Two rows of two: the frequent pair (Frog, Background) sits on top.
 BUTTON_ROWS = (
     (
@@ -145,7 +151,7 @@ UNDO_DEPTH = 20
 
 
 def _reset_session() -> None:
-    for key in ("queue", "index", "last_move", "history", "error"):
+    for key in ("queue", "index", "last_move", "history", "error", "review_clip", "history_shown"):
         st.session_state.pop(key, None)
 
 
@@ -184,6 +190,112 @@ def _decide(clip: Path, decision: str, faint: bool, *, labeled_root: Path, log: 
     st.session_state["index"] += 1
 
 
+def _clip_caption(clip) -> str:
+    title = FOLDER_TITLES.get(clip.folder, clip.folder)
+    if clip.faint:
+        title += ", faint"
+    when = clip.decided_at.replace("T", " ").replace("Z", " UTC") if clip.decided_at else "before the log"
+    return f"{title} | {when} | {clip.path.stem}"
+
+
+def _finish_review(notice: str) -> None:
+    st.session_state.pop("error", None)
+    st.session_state.pop("review_clip", None)
+    st.session_state["notice"] = notice
+
+
+def _render_review(clip: Path, *, labeled_root: Path, spectrogram_root: Path, raw_root: Path, chunk_root: Path, log: DecisionLog, config) -> None:
+    chunk_seconds = config.audio.chunk_seconds
+    if not clip.is_file():
+        _finish_review("That clip is no longer in the labeled folders.")
+        st.rerun()
+    origin = current_folder(clip, labeled_root)
+    st.subheader(clip.stem)
+    st.info(f"Current label: {FOLDER_TITLES.get(origin, origin)}")
+    col_img, col_controls = st.columns([2, 1], gap="large")
+    with col_img:
+        st.image(colorize(clip.read_bytes()), use_container_width=True)
+    audio_path = find_or_export_chunk(clip, raw_root=raw_root, chunk_root=chunk_root, config=config)
+    with col_controls:
+        st.markdown("### Actions")
+        if audio_path is not None:
+            st.audio(audio_path.read_bytes(), format="audio/wav")
+        else:
+            st.info("No audio found for this clip.")
+        for row in BUTTON_ROWS:
+            for column, (label, decision, faint) in zip(st.columns(2, gap="small"), row):
+                kind = "primary" if decision == "litoria_aurea" and not faint else "secondary"
+                with column:
+                    if st.button(label, key=f"review-decide-{label}", type=kind, use_container_width=True):
+                        try:
+                            if origin == decision:
+                                confirm_decision(clip, labeled_root=labeled_root, log=log, faint=True if faint else None, chunk_seconds=chunk_seconds)
+                                _finish_review("Confirmed.")
+                            else:
+                                record_decision(clip, decision, labeled_root=labeled_root, log=log, faint=faint, chunk_seconds=chunk_seconds)
+                                _finish_review(f"Moved to {FOLDER_TITLES[decision]}.")
+                        except (ValueError, OSError) as error:
+                            st.session_state["error"] = str(error)
+                        st.rerun()
+        st.divider()
+        if st.button("Send back to queue", use_container_width=True):
+            try:
+                return_to_queue(
+                    clip, labeled_root=labeled_root, spectrogram_root=spectrogram_root,
+                    raw_root=raw_root, log=log, chunk_seconds=chunk_seconds,
+                )
+                _finish_review("Returned to the queue; it is unlabeled again.")
+            except (ValueError, OSError) as error:
+                st.session_state["error"] = str(error)
+            st.rerun()
+        if st.button("Back to history", use_container_width=True):
+            st.session_state.pop("review_clip", None)
+            st.session_state.pop("error", None)
+            st.rerun()
+
+
+def _render_history(*, labeled_root: Path, spectrogram_root: Path, raw_root: Path, chunk_root: Path, log: DecisionLog, config) -> None:
+    chunk_seconds = config.audio.chunk_seconds
+    progress = summarize_labels(labeled_root, chunk_seconds=chunk_seconds)
+    for column, folder in zip(st.columns(3), DECISION_FOLDERS):
+        column.metric(FOLDER_TITLES[folder], progress[folder].clips, f"{progress[folder].recordings} recordings")
+    if st.session_state.get("error"):
+        st.error(st.session_state["error"])
+    if st.session_state.get("notice"):
+        st.info(st.session_state.pop("notice"))
+
+    review = st.session_state.get("review_clip")
+    if review is not None:
+        _render_review(
+            Path(review), labeled_root=labeled_root, spectrogram_root=spectrogram_root,
+            raw_root=raw_root, chunk_root=chunk_root, log=log, config=config,
+        )
+        return
+
+    clips = latest_decisions(labeled_root, log, chunk_seconds=chunk_seconds)
+    wanted = HISTORY_FILTERS[st.radio("Show", tuple(HISTORY_FILTERS), horizontal=True)]
+    if wanted is not None:
+        clips = [clip for clip in clips if clip.folder == wanted]
+    shown = st.session_state.get("history_shown", HISTORY_PAGE)
+    st.caption(f"Showing {min(shown, len(clips))} of {len(clips)} labeled clips, newest first.")
+    if not clips:
+        st.info("Nothing labeled yet for this filter.")
+        return
+    page = clips[:shown]
+    for start in range(0, len(page), 4):
+        for column, clip in zip(st.columns(4), page[start : start + 4]):
+            with column:
+                st.image(colorize(clip.path.read_bytes()), use_container_width=True)
+                st.caption(_clip_caption(clip))
+                if st.button("Review", key=f"review-{clip.path.name}", use_container_width=True):
+                    st.session_state["review_clip"] = str(clip.path)
+                    st.session_state.pop("error", None)
+                    st.rerun()
+    if shown < len(clips) and st.button("Show more", use_container_width=True):
+        st.session_state["history_shown"] = shown + HISTORY_PAGE
+        st.rerun()
+
+
 def main() -> None:
     st.set_page_config(page_title="Frog Spectrogram Labeler", layout="wide")
     _inject_sidebar_css()
@@ -192,11 +304,12 @@ def main() -> None:
     chunk_seconds = config.audio.chunk_seconds
 
     with st.sidebar:
-        mode = st.radio("Mode", (MODE_LABEL, MODE_AUDIT))
+        mode = st.radio("Mode", (MODE_LABEL, MODE_AUDIT, MODE_HISTORY))
         st.header("Quick start")
         st.write("1) Press Play and listen")
         st.write("2) Choose Frog, Frog faint, Background, or Unsure")
         st.write("3) In audit mode, pressing the current label confirms it")
+        st.write("4) Review history shows what you labeled and lets you change or return any clip")
         with st.expander("Advanced settings", expanded=False):
             spectrogram_root = Path(st.text_input("spectrogram_root", str(REPO_ROOT / "processed" / "external" / "spectrograms")))
             raw_root = Path(st.text_input("raw_root", str(REPO_ROOT / "raw" / "external")))
@@ -218,6 +331,13 @@ def main() -> None:
         st.session_state["settings"] = settings
 
     log = DecisionLog(labeled_root / LOG_NAME)
+
+    if mode == MODE_HISTORY:
+        _render_history(
+            labeled_root=labeled_root, spectrogram_root=spectrogram_root, raw_root=raw_root,
+            chunk_root=chunk_root, log=log, config=config,
+        )
+        return
 
     if "queue" not in st.session_state:
         source = _pngs_under(spectrogram_root) if mode == MODE_LABEL else _labeled_pngs(labeled_root)
