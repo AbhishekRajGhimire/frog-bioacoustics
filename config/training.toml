@@ -1,0 +1,21 @@
+schema_version = 1
+seed = 1337
+
+[model]
+pretrained = true
+
+[optimization]
+batch_size = 64
+max_epochs = 30
+learning_rate = 0.0003
+weight_decay = 0.01
+early_stopping_patience = 8
+
+[augmentation]
+time_mask_max_frames = 20
+frequency_mask_max_bins = 12
+max_attenuation_db = 6.0
+
+[baseline]
+image_size = 64
+inverse_regularization = 1.0

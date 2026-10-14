@@ -63,7 +63,7 @@ class ConfigError(ValueError):
     pass
 
 
-def _section(data: dict[str, object], name: str, keys: set[str]) -> dict[str, object]:
+def require_section(data: dict[str, object], name: str, keys: set[str]) -> dict[str, object]:
     value = data.get(name)
     if not isinstance(value, dict):
         raise ConfigError(f"missing or invalid {name} section")
@@ -72,7 +72,7 @@ def _section(data: dict[str, object], name: str, keys: set[str]) -> dict[str, ob
     return value
 
 
-def _value(data: dict[str, object], key: str, expected: type) -> object:
+def require_value(data: dict[str, object], key: str, expected: type) -> object:
     value = data[key]
     if expected is int and (not isinstance(value, int) or isinstance(value, bool)):
         raise ConfigError(f"{key} must be an integer")
@@ -94,7 +94,7 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise ConfigError(f"invalid preprocessing TOML: {error}") from error
 
-    if "schema_version" in data and _value(data, "schema_version", int) != SUPPORTED_SCHEMA_VERSION:
+    if "schema_version" in data and require_value(data, "schema_version", int) != SUPPORTED_SCHEMA_VERSION:
         raise ConfigError(
             f"schema_version must be {SUPPORTED_SCHEMA_VERSION}; spectrograms rendered "
             "under an earlier schema must be regenerated"
@@ -111,51 +111,51 @@ def load_preprocessing_config(path: Path) -> PreprocessingConfig:
             f"missing: {missing}; unexpected: {unexpected}"
         )
 
-    audio_data = _section(data, "audio", {
+    audio_data = require_section(data, "audio", {
         "sample_rate_hz", "mono", "chunk_seconds", "overlap_seconds",
         "drop_incomplete_final_chunk",
     })
-    spectrogram_data = _section(data, "spectrogram", {
+    spectrogram_data = require_section(data, "spectrogram", {
         "kind", "n_mels", "fmin_hz", "fmax_hz", "power", "n_fft", "hop_length",
     })
-    normalization_data = _section(data, "normalization", {
+    normalization_data = require_section(data, "normalization", {
         "reference", "noise_floor_percentile", "db_floor", "db_ceiling",
     })
-    rendering_data = _section(data, "rendering", {
+    rendering_data = require_section(data, "rendering", {
         "format", "bit_depth", "low_frequency_at_bottom",
     })
-    classes_data = _section(data, "classes", {"litoria_aurea", "non_target"})
+    classes_data = require_section(data, "classes", {"litoria_aurea", "non_target"})
 
     audio = AudioConfig(
-        sample_rate_hz=int(_value(audio_data, "sample_rate_hz", int)),
-        mono=bool(_value(audio_data, "mono", bool)),
-        chunk_seconds=int(_value(audio_data, "chunk_seconds", int)),
-        overlap_seconds=int(_value(audio_data, "overlap_seconds", int)),
-        drop_incomplete_final_chunk=bool(_value(audio_data, "drop_incomplete_final_chunk", bool)),
+        sample_rate_hz=int(require_value(audio_data, "sample_rate_hz", int)),
+        mono=bool(require_value(audio_data, "mono", bool)),
+        chunk_seconds=int(require_value(audio_data, "chunk_seconds", int)),
+        overlap_seconds=int(require_value(audio_data, "overlap_seconds", int)),
+        drop_incomplete_final_chunk=bool(require_value(audio_data, "drop_incomplete_final_chunk", bool)),
     )
     spectrogram = SpectrogramConfig(
-        kind=str(_value(spectrogram_data, "kind", str)),
-        n_mels=int(_value(spectrogram_data, "n_mels", int)),
-        fmin_hz=int(_value(spectrogram_data, "fmin_hz", int)),
-        fmax_hz=int(_value(spectrogram_data, "fmax_hz", int)),
-        power=float(_value(spectrogram_data, "power", float)),
-        n_fft=int(_value(spectrogram_data, "n_fft", int)),
-        hop_length=int(_value(spectrogram_data, "hop_length", int)),
+        kind=str(require_value(spectrogram_data, "kind", str)),
+        n_mels=int(require_value(spectrogram_data, "n_mels", int)),
+        fmin_hz=int(require_value(spectrogram_data, "fmin_hz", int)),
+        fmax_hz=int(require_value(spectrogram_data, "fmax_hz", int)),
+        power=float(require_value(spectrogram_data, "power", float)),
+        n_fft=int(require_value(spectrogram_data, "n_fft", int)),
+        hop_length=int(require_value(spectrogram_data, "hop_length", int)),
     )
     normalization = NormalizationConfig(
-        reference=str(_value(normalization_data, "reference", str)),
-        noise_floor_percentile=int(_value(normalization_data, "noise_floor_percentile", int)),
-        db_floor=float(_value(normalization_data, "db_floor", float)),
-        db_ceiling=float(_value(normalization_data, "db_ceiling", float)),
+        reference=str(require_value(normalization_data, "reference", str)),
+        noise_floor_percentile=int(require_value(normalization_data, "noise_floor_percentile", int)),
+        db_floor=float(require_value(normalization_data, "db_floor", float)),
+        db_ceiling=float(require_value(normalization_data, "db_ceiling", float)),
     )
     rendering = RenderingConfig(
-        format=str(_value(rendering_data, "format", str)),
-        bit_depth=int(_value(rendering_data, "bit_depth", int)),
-        low_frequency_at_bottom=bool(_value(rendering_data, "low_frequency_at_bottom", bool)),
+        format=str(require_value(rendering_data, "format", str)),
+        bit_depth=int(require_value(rendering_data, "bit_depth", int)),
+        low_frequency_at_bottom=bool(require_value(rendering_data, "low_frequency_at_bottom", bool)),
     )
     classes = {
-        "litoria_aurea": int(_value(classes_data, "litoria_aurea", int)),
-        "non_target": int(_value(classes_data, "non_target", int)),
+        "litoria_aurea": int(require_value(classes_data, "litoria_aurea", int)),
+        "non_target": int(require_value(classes_data, "non_target", int)),
     }
 
     if audio.sample_rate_hz <= 0 or audio.chunk_seconds <= 0:
