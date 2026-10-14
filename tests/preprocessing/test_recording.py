@@ -11,10 +11,11 @@ from frog_classifier.preprocessing.recording import (
     RenderedChunk,
     render_recording,
     render_waveform,
+    render_waveform_images,
 )
 from frog_classifier.preprocessing.spectrogram import decode_png
 from tests.data.helpers import load_test_config
-from tests.preprocessing.helpers import silence, tone, write_wav
+from tests.preprocessing.helpers import noise, silence, tone, write_wav
 
 
 class RenderRecordingTests(unittest.TestCase):
@@ -64,6 +65,17 @@ class RenderRecordingTests(unittest.TestCase):
         ]
 
         self.assertEqual(from_file, from_array)
+
+    def test_window_images_are_the_pixels_each_png_stores(self) -> None:
+        waveform = np.concatenate([noise(5), noise(5, seed=1) + tone(1000.0, 5), noise(6, seed=2)])
+
+        images = list(render_waveform_images(waveform, self.config))
+        chunks = list(render_waveform(waveform, self.config))
+
+        self.assertEqual([image.start_s for image in images], [0, 5, 10])
+        for image, chunk in zip(images, chunks, strict=True):
+            self.assertEqual(image.pixels.dtype, np.uint8)
+            np.testing.assert_array_equal(image.pixels, decode_png(chunk.png_bytes))
 
 
 if __name__ == "__main__":

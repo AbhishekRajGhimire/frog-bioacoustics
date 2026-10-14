@@ -18,6 +18,12 @@ class RenderedChunk:
     png_bytes: bytes
 
 
+@dataclass(frozen=True)
+class ChunkImage:
+    start_s: int
+    pixels: np.ndarray
+
+
 def load_waveform(path: Path, config: PreprocessingConfig) -> np.ndarray:
     """Mono waveform at the configured sample rate."""
     waveform, _ = librosa.load(
@@ -28,11 +34,11 @@ def load_waveform(path: Path, config: PreprocessingConfig) -> np.ndarray:
     return np.asarray(waveform, dtype=np.float32)
 
 
-def render_waveform(
+def render_waveform_images(
     waveform: np.ndarray,
     config: PreprocessingConfig,
-) -> Iterator[RenderedChunk]:
-    """Yield one rendered chunk per complete window, in order.
+) -> Iterator[ChunkImage]:
+    """Yield one 8-bit spectrogram image per complete window, in order.
 
     The noise floor comes from every frame of the whole waveform, including
     any incomplete tail. Each chunk's spectrogram is computed from the chunk's
@@ -50,16 +56,24 @@ def render_waveform(
     for index in range(complete_chunks):
         start = index * samples_per_chunk
         chunk = waveform[start : start + samples_per_chunk]
-        image = chunk_image(
-            _mel_decibels(chunk, config),
-            floor,
-            db_floor=config.normalization.db_floor,
-            db_ceiling=config.normalization.db_ceiling,
-        )
-        yield RenderedChunk(
+        yield ChunkImage(
             start_s=index * config.audio.chunk_seconds,
-            png_bytes=encode_png(image),
+            pixels=chunk_image(
+                _mel_decibels(chunk, config),
+                floor,
+                db_floor=config.normalization.db_floor,
+                db_ceiling=config.normalization.db_ceiling,
+            ),
         )
+
+
+def render_waveform(
+    waveform: np.ndarray,
+    config: PreprocessingConfig,
+) -> Iterator[RenderedChunk]:
+    """Yield one PNG-encoded chunk per complete window, in order."""
+    for image in render_waveform_images(waveform, config):
+        yield RenderedChunk(start_s=image.start_s, png_bytes=encode_png(image.pixels))
 
 
 def render_recording(

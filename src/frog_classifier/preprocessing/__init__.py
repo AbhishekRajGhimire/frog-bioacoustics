@@ -1,8 +1,10 @@
 from .recording import (
+    ChunkImage,
     RenderedChunk,
     load_waveform,
     render_recording,
     render_waveform,
+    render_waveform_images,
 )
 from .spectrogram import (
     chunk_image,
@@ -13,6 +15,7 @@ from .spectrogram import (
 )
 
 __all__ = [
+    "ChunkImage",
     "RenderedChunk",
     "chunk_image",
     "decode_png",
@@ -22,4 +25,5 @@ __all__ = [
     "noise_floor",
     "render_recording",
     "render_waveform",
+    "render_waveform_images",
 ]
