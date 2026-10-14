@@ -41,7 +41,7 @@ field recordings
     -> careful human labels
     -> validated manifest
     -> recording-group folds and quality reports
-    -> baseline and future model training
+    -> baseline and ResNet-18 training
     -> future detections and activity analysis
 ```
 
@@ -72,10 +72,14 @@ The manifest is the source of truth for which examples belong to training, valid
 All windows from the same recording stay in one fold and one split.
 This prevents a model from being tested on audio that is too closely related to its training data.
 
-### 6. Baseline and future models
+### 6. Baseline and model training
 
 `scripts/train_baseline.py` checks that the validated data can pass through a complete training and evaluation path.
-Later phases will add reproducible saved models and batch recording inference.
+`scripts/train_model.py` trains the real detector, a ResNet-18 image model that starts from weights learned on everyday photographs and is fine-tuned on the spectrograms.
+It chooses its detection threshold on the validation fold, reports results on the test fold, compares itself with the simple baseline, and repeats the training with each fold held out in turn to show how stable the results are.
+Every run is saved as one folder under `models/` with the model, copies of its inputs, every prediction, and a readable `report.md`.
+`scripts/verify_model.py` reloads a saved run and proves it reproduces its own predictions.
+Batch detection on new recordings comes in a later phase.
 
 ## Repository structure
 
@@ -89,6 +93,7 @@ frog-bioacoustics/
 
   config/
     preprocessing.toml         audio, spectrogram, rendering, and class contract
+    training.toml              model training settings
 
   raw/                         immutable source recordings
     external/                  externally supplied recordings
@@ -111,14 +116,17 @@ frog-bioacoustics/
     label_frontend.py          Streamlit labeler with label and audit modes
     build_manifest.py          validate labels and build reports
     train_baseline.py          run the strict sanity baseline
+    train_model.py             train, evaluate, and save the ResNet-18 detector
+    verify_model.py            prove a saved run reproduces its predictions
 
   src/frog_classifier/         reusable Python package
     data/                      config, naming, manifests, folds, validation, and reports
     preprocessing/             Mel rendering, noise floor, PNG encoding, and display colours
     labeling/                  queue order, decision log, moves, and playback audio
+    training/                  model, training loop, metrics, saved runs, and verification
 
   tests/                       synthetic automated checks
-  models/                      future generated model artifacts
+  models/                      saved training runs
   results/                     generated quality and analytics outputs
   classifier_app/              future user-facing application
 

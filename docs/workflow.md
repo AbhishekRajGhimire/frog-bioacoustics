@@ -12,14 +12,18 @@ Install [uv](https://docs.astral.sh/uv/) and create the locked environment:
 uv sync --frozen
 ```
 
+The sync also installs the default `model` dependency group, which holds PyTorch and torchvision.
+On Windows and Linux they come from the PyTorch CUDA 13.0 package index, so an NVIDIA GPU with a recent driver is used when present and the CPU otherwise.
+
 To open the graphical labeler on Windows without using uv directly, double-click `Launch_Labeler.bat`.
 The launcher creates `.venv`, installs the generated locked compatibility export, and opens the Streamlit interface.
 `requirements_labeler.txt` is generated from `uv.lock` and must not be edited manually.
+It leaves out the `model` group, so the labeler never downloads PyTorch.
 After intentionally changing direct dependency constraints, refresh the lock and compatibility export:
 
 ```powershell
 uv lock
-uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file requirements_labeler.txt
+uv export --frozen --no-default-groups --no-hashes --format requirements-txt --output-file requirements_labeler.txt
 ```
 
 ## Generate spectrograms
@@ -155,6 +159,57 @@ uv run python scripts/train_baseline.py
 The baseline is a pipeline and evaluation sanity check.
 It does not save a model or perform recording inference.
 
+## Train and verify the detector
+
+`scripts/train_model.py` fine-tunes an ImageNet-pretrained ResNet-18 on the validated manifest and saves the result as one run folder under `models/`.
+The training settings live in [config/training.toml](../config/training.toml), which is validated like the preprocessing configuration and recorded by checksum with every run.
+Rebuild the manifest first so training sees the current labels.
+
+```powershell
+uv run python scripts/build_manifest.py
+uv run python scripts/train_model.py
+```
+
+The saved model trains on the manifest's training folds, keeps the epoch with the best validation average precision, and chooses its detection threshold on the validation fold as the probability with the highest F1, ties going to the higher threshold.
+The test fold is used only to report results.
+By default the command also trains four more models, rotating the folds so every fold is the test fold once, to show how much performance varies between groups of recordings.
+Those rotations also give every labeled clip a probability from a model that never trained on its recording, which is the place to look for labels worth re-checking.
+Skip the extra rotations for a quick check:
+
+```powershell
+uv run python scripts/train_model.py --no-cross-validation
+```
+
+A run on the RTX 4080 laptop GPU takes a few minutes; a CPU-only machine works but is much slower.
+The first run downloads the ResNet-18 ImageNet weights, about 45 MB, into the PyTorch cache.
+
+Each run folder is named `resnet18-<UTC time>` and holds:
+
+| File | Contents |
+| --- | --- |
+| `model.pt` | The saved model weights |
+| `run.json` | Metadata, threshold, metrics, provenance, and the SHA-256 of every other file |
+| `report.md` | Human-readable results |
+| `preprocessing.toml`, `training.toml`, `manifest.csv` | Exact copies of the inputs as they were when training started |
+| `predictions.csv` | Every manifest clip with its image checksum, faint tag, ResNet probability, and baseline probability |
+| `history.csv` | Loss and validation average precision per epoch |
+| `cross_validation.csv`, `out_of_fold_predictions.csv` | Per-rotation results and out-of-fold probabilities, when cross-validation ran |
+| `precision_recall.png` | Validation and test precision-recall curves with the chosen thresholds |
+
+The report compares the ResNet with the logistic-regression baseline on identical data, states the expected false detections per hour of recording without a frog call, breaks test errors down by recording hour, and gives recall on faint-tagged frog clips separately.
+A run is written under a hidden temporary name and renamed only when complete, and the command never reuses an existing folder.
+
+Prove that a saved run reproduces its own predictions:
+
+```powershell
+uv run python scripts/verify_model.py models/<run folder>
+uv run python scripts/verify_model.py models/<run folder> --device cpu
+```
+
+Verification checks every file checksum in `run.json`, reloads the weights without downloading anything, re-reads every image, and recomputes every probability.
+A difference above 0.0001 fails, and an image that was relabeled, returned to the queue, or regenerated since training is reported as missing or changed.
+The command exits non-zero on any failure.
+
 ## Verify Phase 2 acceptance
 
 Run the real-data manifest twice and compare all three generated artifacts:
@@ -185,7 +240,7 @@ uv lock --check
 uv sync --frozen
 uv pip check
 uv run python -m unittest discover -s tests -v
-uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/slice_audio.py scripts/sync_labeled_images.py scripts/train_baseline.py scripts/verify_spectrograms.py
+uv run python -B -m py_compile scripts/build_manifest.py scripts/label_frontend.py scripts/slice_audio.py scripts/sync_labeled_images.py scripts/train_baseline.py scripts/train_model.py scripts/verify_model.py scripts/verify_spectrograms.py
 git diff --check
 ```
 

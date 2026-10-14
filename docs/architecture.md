@@ -14,6 +14,8 @@ flowchart LR
   C -->|"validate and assign grouped folds"| D["Versioned manifest<br/>labeled/manifest.csv"]
   D -->|"write reproducibility reports"| R["Data-quality reports<br/>results/data_quality"]
   D -->|"load validated rows"| E["Strict baseline<br/>logistic regression"]
+  D -->|"train, rotate folds, choose threshold"| M["Saved run<br/>models/resnet18-time"]
+  M -->|"recompute every probability"| V["Verified predictions"]
 ```
 
 ## Storage contract
@@ -25,12 +27,14 @@ labeled/                     human-selected PNGs and generated manifest.csv
 labeled/unsure/              clips the reviewer could not decide on, excluded from training
 labeled/decisions.csv        append-only log of labeling decisions
 config/preprocessing.toml    versioned preprocessing and class contract
+config/training.toml         versioned training contract
 results/data_quality/        generated manifest validation reports
-models/                      future saved model artifacts
+models/<run>/                saved training runs: weights, input copies, predictions, metrics, report
 results/analytics/           future inference and analysis outputs
 src/frog_classifier/data/    manifest, splitting, validation, reporting, and configuration package
 src/frog_classifier/preprocessing/   Mel rendering, per-recording noise floor, PNG encoding, display colours
 src/frog_classifier/labeling/   session queue, decision log, moves, playback audio
+src/frog_classifier/training/   training configuration, model, training loop, metrics, saved runs, verification
 docs/decisions/              dated design decisions with their evidence
 ```
 
@@ -102,9 +106,42 @@ The reports make every training and evaluation input inspectable without trackin
 It trains a balanced logistic-regression classifier on resized grayscale spectrograms only after the strict manifest workflow has produced valid train, validation, and test rows.
 The baseline is a data-path and evaluation sanity check rather than a production classifier.
 It does not persist a model or perform recording inference.
+Its featurization and classifier live in `frog_classifier.training.baseline`, so the ResNet run fits the identical baseline for comparison.
+
+## Model training
+
+`scripts/train_model.py` delegates to `frog_classifier.training.run`, which loads and validates the preprocessing configuration, [`config/training.toml`](../config/training.toml), and the manifest, then snapshots those three inputs and the git commit before anything trains.
+The package `__init__` re-exports nothing, so importing the baseline module never loads PyTorch, and nothing outside the package imports it.
+
+| Module | Responsibility |
+| --- | --- |
+| `config` | Load and validate the training contract and record its checksum |
+| `images` | Decode stored PNGs into one array, checking the contract's 128 by 216 shape, and checksum each file |
+| `augment` | Seeded training-batch augmentation: circular time shift, attenuation of energy above the noise floor, and one time and one Mel mask |
+| `model` | ResNet-18 with ImageNet weights, one-channel input repeated to three ImageNet-normalized channels, and a single frog logit |
+| `fit` | AdamW with cosine annealing, early stopping on validation average precision, batch prediction, and full fp32 arithmetic so GPU and CPU predictions agree |
+| `metrics` | The threshold rule, split metrics, errors by recording hour, and recall on faint-tagged clips |
+| `baseline` | Logistic-regression features and fitting shared with `scripts/train_baseline.py` |
+| `artifact` | Staged run folders, checksums, and CSV and JSON reading and writing |
+| `report` | The Markdown report and the precision-recall figure, built only from `run.json` content |
+| `run` | One complete run from the manifest to a saved folder |
+| `verify` | Reproduce a saved run's predictions |
+
+Rotation zero trains on the manifest's training folds, keeps the epoch with the best validation average precision, and is the saved model.
+Its threshold is the validation probability with the highest F1, ties going to the higher threshold, and the test fold only reports results.
+Cross-validation adds one rotation per remaining fold, each shifting the test and validation folds by the same offset, so every fold is tested once and every labeled clip receives an out-of-fold probability.
+The logistic-regression baseline is fitted and thresholded the same way in every rotation.
+Faint tags come from the decision log at training time and are stored with the predictions.
+
+A run is written to `models/.resnet18-<UTC time>.partial/` and renamed to `models/resnet18-<UTC time>/` only after `run.json` records the SHA-256 of every other file, so an interrupted run never looks finished and no run overwrites another.
+`run.json` also records the architecture, starting weights, input shape, class mapping, threshold and rule, seed, device, library versions, the checksums of the three inputs and `uv.lock`, the git commit and whether the worktree had uncommitted changes, and every metric.
+
+`scripts/verify_model.py` delegates to `frog_classifier.training.verify`, which checks every recorded checksum, reloads the weights without downloading anything, re-reads every image listed in `predictions.csv`, and compares each recomputed probability with the saved one within 0.0001.
+An image that is gone or whose bytes changed since training is reported as such rather than as a prediction mismatch.
 
 ## Environment contract
 
 Python 3.13 is supported.
 `pyproject.toml` declares direct runtime dependencies, `uv.lock` records the resolved environment, and `requirements_labeler.txt` is the generated pip-compatible export used by the Windows launcher.
+PyTorch and torchvision form the default `model` dependency group, resolved from the explicit PyTorch CUDA 13.0 index on Windows and Linux; the labeler export leaves the group out.
 Create the environment with `uv sync --frozen`.

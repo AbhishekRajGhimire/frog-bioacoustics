@@ -32,6 +32,7 @@ GENERATED_PATHS = (
     "labeled/decisions.csv",
     "labeled/unsure/example.png",
     "models/example.pkl",
+    "models/resnet18-20261014T000000Z/model.pt",
     "results/analytics/example.csv",
     "results/data_quality/example.json",
 )
@@ -58,6 +59,14 @@ LABELING_PACKAGE_MODULES = (
     "src/frog_classifier/labeling/audio.py",
     "src/frog_classifier/labeling/decisions.py",
     "src/frog_classifier/labeling/queue.py",
+)
+
+TRAINING_PACKAGE_MODULES = tuple(
+    f"src/frog_classifier/training/{name}.py"
+    for name in (
+        "__init__", "artifact", "augment", "baseline", "config", "fit",
+        "images", "metrics", "model", "report", "run", "verify",
+    )
 )
 
 OPERATIONAL_DOCUMENTS = (
@@ -117,6 +126,8 @@ OPERATIONAL_TEXT_FILES = (
     "scripts/slice_audio.py",
     "scripts/sync_labeled_images.py",
     "scripts/train_baseline.py",
+    "scripts/train_model.py",
+    "scripts/verify_model.py",
     "scripts/verify_spectrograms.py",
 )
 
@@ -155,9 +166,11 @@ class RepositoryLayoutTests(unittest.TestCase):
         for relative_path in (
             *OPERATIONAL_DOCUMENTS,
             "config/preprocessing.toml",
+            "config/training.toml",
             *DATA_PACKAGE_MODULES,
             *PREPROCESSING_PACKAGE_MODULES,
             *LABELING_PACKAGE_MODULES,
+            *TRAINING_PACKAGE_MODULES,
         ):
             with self.subTest(required=relative_path):
                 self.assertTrue((REPO_ROOT / relative_path).is_file())
@@ -277,6 +290,8 @@ class OperationalDocumentationTests(unittest.TestCase):
             "uv run python scripts/verify_spectrograms.py --sample 50",
             "uv run python scripts/build_manifest.py",
             "uv run python scripts/train_baseline.py",
+            "uv run python scripts/train_model.py",
+            "uv run python scripts/verify_model.py",
         ):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)

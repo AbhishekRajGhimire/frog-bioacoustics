@@ -9,18 +9,19 @@ The project is at the Phase 2 data-integrity checkpoint, where reliable manifest
 - New to the repository? Read the beginner-friendly [project outline](docs/outline.md) first.
 - Read the [roadmap](roadmap.md) for planned phases and acceptance criteria.
 - Read the [architecture](docs/architecture.md) for storage contracts and package boundaries.
-- Read the [workflow](docs/workflow.md) for day-to-day preprocessing, labeling, manifest, and baseline commands.
+- Read the [workflow](docs/workflow.md) for day-to-day preprocessing, labeling, manifest, and training commands.
 
 ## Pipeline
 
 ```text
-raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> strict baseline
+raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> ResNet-18 training and verification
 ```
 
 `raw/` holds immutable source recordings.
 `processed/` holds reproducible spectrograms and optional playback chunks.
 `labeled/` holds human-selected PNGs and the generated manifest.
 `results/data_quality/` receives generated validation reports.
+`models/` receives saved training runs.
 The manifest workflow trains directly from labeled images, so materialized split directories are not part of the tracked layout.
 
 ## Setup
@@ -77,6 +78,13 @@ Run the strict logistic-regression baseline after a valid manifest has been gene
 
 ```powershell
 uv run python scripts/train_baseline.py
+```
+
+Train, evaluate, and save the ResNet-18 detector, then prove the saved run reproduces its predictions:
+
+```powershell
+uv run python scripts/train_model.py
+uv run python scripts/verify_model.py models/<run folder>
 ```
 
 ## Labeling policy
