@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import pickle
 import tempfile
 import unittest
 from pathlib import Path
+from types import MappingProxyType
 
 from frog_classifier.data.config import ConfigError, load_preprocessing_config
 
@@ -108,6 +110,14 @@ class LoadPreprocessingConfigTests(unittest.TestCase):
         self.assertEqual(dict(config.classes), {"litoria_aurea": 1, "non_target": 0})
         self.assertEqual(config.source_path, source_path)
         self.assertEqual(config.sha256, hashlib.sha256(VALID_CONFIG).hexdigest())
+
+    def test_a_configuration_can_be_sent_to_worker_processes(self) -> None:
+        config, _ = self.load(VALID_CONFIG)
+
+        restored = pickle.loads(pickle.dumps(config))
+
+        self.assertEqual(restored, config)
+        self.assertIsInstance(restored.classes, MappingProxyType)
 
     def test_rejects_schema_version_one_and_asks_for_regeneration(self) -> None:
         with self.assertRaisesRegex(ConfigError, "regenerated"):

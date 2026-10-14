@@ -58,6 +58,14 @@ class PreprocessingConfig:
     source_path: Path
     sha256: str
 
+    # A read-only mapping cannot be pickled, and detection sends this configuration
+    # to its rendering worker processes by pickling, so the classes travel as a dict.
+    def __getstate__(self) -> dict[str, object]:
+        return {**self.__dict__, "classes": dict(self.classes)}
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        self.__dict__.update(state, classes=MappingProxyType(state["classes"]))
+
 
 class ConfigError(ValueError):
     pass

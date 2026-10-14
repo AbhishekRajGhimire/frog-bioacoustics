@@ -5,8 +5,18 @@ from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
 import numpy as np
+import torch
 
 from frog_classifier.inference.store import RecordingRow, ScanIdentity
+from frog_classifier.training.artifact import (
+    ARTIFACT_SCHEMA_VERSION,
+    MODEL_FILE,
+    PREPROCESSING_FILE,
+    finish_run,
+    start_run,
+)
+from frog_classifier.training.model import ARCHITECTURE, SpectrogramResNet
+from tests.data.helpers import VALID_CONFIG
 
 
 AUDIOMOTH_COMMENT = (
@@ -69,3 +79,23 @@ def recording_row(path: str, **changes: object) -> RecordingRow:
         processed_at="2026-10-15T00:00:00Z",
     )
     return replace(row, **changes)
+
+
+def build_saved_run(
+    models_root: Path,
+    *,
+    name: str = "resnet18-20261015T000000Z",
+    threshold: float = 0.5,
+    seed: int = 0,
+) -> Path:
+    """A saved run holding an untrained network: detection needs a valid run, not a good model."""
+    torch.manual_seed(seed)
+    staging = start_run(models_root, name)
+    torch.save(SpectrogramResNet(pretrained=False).state_dict(), staging / MODEL_FILE)
+    (staging / PREPROCESSING_FILE).write_bytes(VALID_CONFIG)
+    return finish_run(staging, {
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "run_name": name,
+        "model": {"architecture": ARCHITECTURE, "input_shape": [1, 128, 216]},
+        "threshold": {"value": threshold, "rule": "chosen by the test"},
+    })
