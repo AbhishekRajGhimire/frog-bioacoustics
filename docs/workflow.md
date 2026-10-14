@@ -210,6 +210,36 @@ Verification checks every file checksum in `run.json`, reloads the weights witho
 A difference above 0.0001 fails, and an image that was relabeled, returned to the queue, or regenerated since training is reported as missing or changed.
 The command exits non-zero on any failure.
 
+## Detect calls in recordings
+
+`scripts/detect_calls.py` runs a saved model over every recording beneath a folder and records the frog probability of every five-second window.
+
+```powershell
+uv run python scripts/detect_calls.py models/<run folder> raw/external
+```
+
+The command finds every `.wav` and `.mp3` file in the folder and its subfolders, renders each recording with the preprocessing contract saved in the run folder, and predicts on the GPU when one is available.
+It checks every file checksum in the run's `run.json` before it starts and never writes inside the input folder.
+Results go to `results/detections/<input folder>-<run folder>/` unless `--output` names another folder:
+
+| File | Contents |
+| --- | --- |
+| `detections.sqlite` | The complete record: the model and preprocessing checksums, every recording with its status, and every window's probability |
+| `detections.csv` | Every window at or above the run's threshold, with its recording, clock time, probability, and model provenance |
+| `recordings.csv` | Every recording with its start time, UTC offset, status, window and detection counts, duration, audio checksum, and any message |
+
+A recording's start time comes from the `YYYYMMDD_HHMMSS` timestamp in its file name, and its UTC offset from the AudioMoth header when the file has one.
+A file that cannot be read is recorded as failed, the batch continues, and the command exits with 1.
+Running the same command again skips every recording already stored, retries failed ones, and rewrites both CSV files, so an interrupted run simply continues.
+An output folder belongs to one input folder, model, and preprocessing contract; the command refuses to mix results and asks for another `--output` folder instead.
+A CSV file open in a spreadsheet program cannot be replaced; close it and run the command again.
+
+Recordings are rendered by several worker processes, by default half the logical CPUs and at most eight:
+
+```powershell
+uv run python scripts/detect_calls.py models/<run folder> raw/external --workers 4 --device cpu
+```
+
 ## Verify Phase 2 acceptance
 
 Run the real-data manifest twice and compare all three generated artifacts:

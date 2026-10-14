@@ -22,6 +22,7 @@ PLACEHOLDERS = (
     "models/.gitkeep",
     "results/analytics/.gitkeep",
     "results/data_quality/.gitkeep",
+    "results/detections/.gitkeep",
 )
 
 GENERATED_PATHS = (
@@ -35,6 +36,7 @@ GENERATED_PATHS = (
     "models/resnet18-20261014T000000Z/model.pt",
     "results/analytics/example.csv",
     "results/data_quality/example.json",
+    "results/detections/external-resnet18-20261014T000000Z/detections.sqlite",
 )
 
 DATA_PACKAGE_MODULES = (
@@ -67,6 +69,11 @@ TRAINING_PACKAGE_MODULES = tuple(
         "__init__", "artifact", "augment", "baseline", "config", "fit",
         "images", "metrics", "model", "report", "run", "saved", "verify",
     )
+)
+
+INFERENCE_PACKAGE_MODULES = tuple(
+    f"src/frog_classifier/inference/{name}.py"
+    for name in ("__init__", "detect", "export", "recordings", "rendering", "store")
 )
 
 OPERATIONAL_DOCUMENTS = (
@@ -123,6 +130,7 @@ OPERATIONAL_TEXT_FILES = (
     "docs/architecture.md",
     "docs/workflow.md",
     "scripts/build_manifest.py",
+    "scripts/detect_calls.py",
     "scripts/slice_audio.py",
     "scripts/sync_labeled_images.py",
     "scripts/train_baseline.py",
@@ -171,6 +179,7 @@ class RepositoryLayoutTests(unittest.TestCase):
             *PREPROCESSING_PACKAGE_MODULES,
             *LABELING_PACKAGE_MODULES,
             *TRAINING_PACKAGE_MODULES,
+            *INFERENCE_PACKAGE_MODULES,
         ):
             with self.subTest(required=relative_path):
                 self.assertTrue((REPO_ROOT / relative_path).is_file())
@@ -292,6 +301,7 @@ class OperationalDocumentationTests(unittest.TestCase):
             "uv run python scripts/train_baseline.py",
             "uv run python scripts/train_model.py",
             "uv run python scripts/verify_model.py",
+            "uv run python scripts/detect_calls.py",
         ):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)
