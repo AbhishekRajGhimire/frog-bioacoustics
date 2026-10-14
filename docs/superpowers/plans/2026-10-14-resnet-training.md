@@ -3329,3 +3329,26 @@ Run the full suite, `git diff --check`, the em dash scan, and `git status --shor
 git add roadmap.md AGENTS.md docs/outline.md README.md
 git commit -m "docs: record the first ResNet training results"
 ```
+
+---
+
+## Execution record
+
+Executed inline on October 14, 2026; every task passed its tests, and the full suite ended at 233 tests.
+
+Rulings made during execution:
+
+- Work happened on `main` in the current checkout, because the project rules say not to change branches when a local edit is safe and the real training run needs the git-ignored labels in this checkout. Nothing was pushed.
+- Task 5 disables TF32 through `torch.backends.cudnn.conv.fp32_precision` and `torch.backends.cuda.matmul.fp32_precision`, the current PyTorch 2.14 switches; CPU and GPU convolutions agree to about 5e-7.
+- Task 5 replaced the planned "last batch of one" training test with a direct test of the batch rule, because a mutation check showed ResNet-18 does not crash on a batch of one here; the rule stays for noisy BatchNorm statistics.
+- Task 8 imports `RunPaths` inside the synthetic repository helper, so configuration tests never depend on the run module.
+- Task 10 added a fix: the run now snapshots the manifest, both configurations, and the git state before training, so an edit made during a long run cannot leak into its record.
+- Task 11 added a one-off check that held out whole nights, because nearly every test clip shared a night with training data; it gave mean average precision 0.997 and F1 0.981.
+
+Final review was a self-review, because helper agents were not requested; it found no critical or important problems.
+
+Deferred minor items:
+
+- The F1 threshold is an observed validation score at the top edge of a tied interval, 0.584 to 0.794 in the saved run; a midpoint would be more robust, with a measured effect of about one test clip.
+- An interrupted run leaves a `models/.resnet18-<time>.partial` folder, and the workflow does not yet say it is safe to delete.
+- On Windows the final rename can fail if another program holds a run file open, leaving a complete run under its `.partial` name.
