@@ -5,23 +5,24 @@ Work is ordered so data integrity and evaluation quality are established before 
 
 ## Current checkpoint
 
-Verified on September 13, 2026:
+Verified on October 14, 2026:
 
-- Raw recordings: 618
+- Raw recordings: 618, all from site IWS076 between January and March 2022, recorded between midnight and noon
 - Duration per recording: five minutes
 - Total five-second examples: 37,080
-- Spectrograms awaiting review: 37,019
-- Positive `litoria_aurea` labels: 13
-- Negative `non_target` labels: 48
-- Unsure `labeled/unsure` clips: 0
-- Unique labeled recording groups: 60
-- Saved models: 0
+- Spectrograms awaiting review: 32,814
+- Positive `litoria_aurea` labels: 1,204 from 176 recordings, 47 tagged faint
+- Negative `non_target` labels: 3,020 from 502 recordings
+- Unsure `labeled/unsure` clips: 42
+- Unique labeled recording groups in the manifest: 570
+- Saved models: 1 (`models/resnet18-20261014T114432Z`)
 - Inference or analytics result artifacts: 0
 - Active Git branch: `main`
 
 Every spectrogram was regenerated under preprocessing schema version 2 with per-recording noise-floor rendering, and a 100-image sample re-rendered from raw audio byte for byte.
 Preprocessing accounts for every expected five-second example.
-The project is currently limited by label coverage and an evaluation split that can omit the positive class from validation or test data.
+The first ResNet-18 detector is trained, saved, and verified.
+The project is now limited by label diversity: every label comes from one site, one season, and the hours between midnight and noon.
 
 ## Working principles
 
@@ -111,7 +112,7 @@ Corrected on September 13, 2026:
 
 ## Phase 3: Purposeful label expansion
 
-Status: Next
+Status: In progress
 
 ### Purpose
 
@@ -134,6 +135,10 @@ September 13, 2026: the labeler gained an Unsure state, an append-only decision 
 The existing 61 labels were audited by ear on September 13, 2026: all 13 frog and 48 background decisions were confirmed, two frog clips were tagged faint, and none was changed or marked unsure.
 Expanding the label set is the next labeling work.
 
+October 14, 2026: the label set reached 1,204 frog clips from 176 recordings and 3,020 background clips from 502 recordings, with 42 clips unsure, and every grouped fold holds about 240 frog clips from at least 32 recordings.
+That passed the threshold for training the first detector, so Phase 4 began.
+Further labeling should target the trained model's confident disagreements and recordings from other sites and seasons rather than more clips from the same nights.
+
 ### Acceptance criteria
 
 - Positive examples span enough independent recording groups for stable grouped evaluation.
@@ -143,7 +148,7 @@ Expanding the label set is the next labeling work.
 
 ## Phase 4: Reproducible model training and persistence
 
-Status: Planned
+Status: Complete
 
 ### Purpose
 
@@ -167,9 +172,26 @@ Train a model whose performance, preprocessing, and artifacts can be reproduced 
 - Threshold selection and expected false-positive behavior are explicit.
 - Training runs record configuration, seed, data manifest, and output checksums.
 
+### Verified acceptance
+
+Verified on October 14, 2026 with run `models/resnet18-20261014T114432Z`, trained from commit `3aa10f9` with no uncommitted changes on an RTX 4080 laptop GPU; the [design](docs/superpowers/specs/2026-10-14-resnet-training-design.md) records every decision.
+
+- The ImageNet-pretrained ResNet-18 reached test average precision 0.996, precision 0.983, recall 0.967, and F1 0.975 at the validation-selected threshold of 0.794.
+- On the same split the logistic-regression baseline reached test average precision 0.826 and F1 0.734, and the ResNet beat it in every rotation.
+- The test confusion matrix is 600 background clips correct, 4 false detections, 231 frog clips found, and 8 missed.
+- The test false-positive rate of 0.7% means about 4.8 false detections per hour of recording without a frog call.
+- Recall on faint-tagged frog clips was 11 of 12 on the test fold.
+- Five-fold rotation gave mean average precision 0.998 with standard deviation 0.002 and mean F1 0.985 with standard deviation 0.009, against 0.809 and 0.730 for the baseline.
+- `scripts/verify_model.py` reproduced all 4,224 saved probabilities on the GPU within 5e-9 and on the CPU within 7e-6.
+- The threshold rule is maximum F1 on the validation fold with ties to the higher threshold; because the model's probabilities sit almost entirely near 0 or 1, the selected value varies widely between runs while precision and recall stay stable.
+
+The grouped folds keep each recording together, but nearly every test clip came from a night that also had recordings in training.
+A one-off check that held out whole nights instead gave mean average precision 0.997 and mean F1 0.981, so the result holds for unseen nights at this site.
+Performance at other sites, in other months, and in evening hours is still unmeasured, because no labeled recording covers them.
+
 ## Phase 5: Batch inference and structured detections
 
-Status: Planned
+Status: Next
 
 ### Purpose
 

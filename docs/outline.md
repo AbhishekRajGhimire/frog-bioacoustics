@@ -15,20 +15,21 @@ The project divides recordings into five-second windows and turns each window in
 A person reviews those images and matching audio clips.
 Confident target calls become `litoria_aurea` examples, confident non-target sounds become `non_target` examples, and uncertain clips are skipped.
 
-The validated labels can later train and evaluate a model.
-Future phases will add stronger model training, batch detection, activity analysis, and a user-facing application.
+The validated labels train and evaluate a ResNet-18 detector.
+Future phases will add batch detection, activity analysis, and a user-facing application.
 
 ## Current status
 
 Phase 1 made the repository reproducible by standardizing its structure, dependencies, class names, commands, and automated checks.
 Phase 2 made the data pipeline trustworthy by validating labels, preventing recording-level leakage, creating deterministic grouped folds, and reporting exactly what enters each evaluation split.
 
-Phase 3 is next.
-It will expand positive examples and difficult negative examples across independent recordings and field conditions.
+Phase 3 expanded the labels to 1,204 frog clips from 176 recordings and 3,020 background clips from 502 recordings.
+Phase 4 trained the first real detector on them.
+On recordings it never saw, it finds about 97 of every 100 frog clips and wrongly flags fewer than 1 in 100 background clips, far ahead of the simple baseline.
+The result held when whole nights were held out.
+Every label comes from one site between January and March, recorded between midnight and noon, so performance elsewhere is still unknown.
 
-The current local acceptance set contains 13 confirmed positive examples and 48 confirmed negative examples.
-That is enough to verify the pipeline, but it is not enough to claim stable model performance.
-The logistic-regression baseline is therefore a pipeline sanity check rather than a production detector.
+Phase 5, batch detection on new recordings, is next, and labeling continues for other sites and seasons.
 
 See the [roadmap](../roadmap.md) for the complete sequence of project phases.
 

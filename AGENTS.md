@@ -5,9 +5,9 @@
 Frog Bioacoustics is building a trustworthy system for finding and analyzing *Litoria aurea* calls in field recordings.
 The pipeline converts recordings into five-second Mel spectrograms, supports careful human labeling, validates evaluation data, and will later support model training, batch detection, and activity analysis.
 
-Phases 1 and 2 are complete.
-Phase 3, purposeful label expansion, is the next project priority.
-The current model baseline verifies the pipeline and is not a production detector.
+Phases 1, 2, and 4 are complete.
+Phase 5, batch inference, is next, while Phase 3 label expansion continues.
+The first ResNet-18 detector is trained and verified on one site and season, and it is not yet validated for other sites.
 
 ## Start with these documents
 
@@ -104,4 +104,4 @@ Never use destructive Git commands such as `git reset --hard` without explicit a
 Make reasonable assumptions that keep work moving without expanding the requested scope.
 Ask only when a missing decision would materially change the result or create risk.
 Lead with the outcome and explain technical details only when they help the user verify or continue the work.
-Report remaining limitations honestly, especially the small number of confirmed positive frog examples.
+Report remaining limitations honestly, especially that every label comes from one site, one season, and the hours between midnight and noon.

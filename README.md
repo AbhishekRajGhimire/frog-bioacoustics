@@ -2,7 +2,7 @@
 
 Frog Classifier turns long field recordings into fixed five-second Mel-spectrogram examples for careful human review and leakage-safe evaluation of *Litoria aurea* calls.
 Each image shows decibels above its own recording's noise floor, so faint calls stay visible and brightness means the same thing in every image.
-The project is at the Phase 2 data-integrity checkpoint, where reliable manifests, grouped folds, and data-quality reports take priority over model complexity.
+Phases 1, 2, and 4 are complete: the first ResNet-18 detector is trained, saved, and verified on one site's recordings, and batch detection on new recordings is next.
 
 ## Start here
 
