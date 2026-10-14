@@ -65,7 +65,7 @@ TRAINING_PACKAGE_MODULES = tuple(
     f"src/frog_classifier/training/{name}.py"
     for name in (
         "__init__", "artifact", "augment", "baseline", "config", "fit",
-        "images", "metrics", "model", "report", "run", "verify",
+        "images", "metrics", "model", "report", "run", "saved", "verify",
     )
 )
 

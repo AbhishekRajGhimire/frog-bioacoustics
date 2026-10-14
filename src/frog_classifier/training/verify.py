@@ -8,10 +8,10 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .artifact import MODEL_FILE, PREDICTIONS_FILE, check_files, file_sha256, read_csv, read_run
+from .artifact import PREDICTIONS_FILE, file_sha256, read_csv, read_run
 from .fit import predict_probabilities, use_full_precision
 from .images import load_spectrograms
-from .model import ARCHITECTURE, SpectrogramResNet
+from .saved import load_model, run_problems
 
 
 # Saved probabilities have eight decimals; GPU and CPU fp32 agree far more closely than this.
@@ -36,16 +36,12 @@ def verify_run(run_dir: Path, repo_root: Path, *, device: torch.device) -> Verif
     gone or whose bytes changed since training is reported as such and skipped.
     """
     metadata = read_run(run_dir)
-    problems = check_files(run_dir, metadata)
+    problems = run_problems(run_dir, metadata)
     if problems:
         return VerificationResult(0, 0.0, tuple(problems))
-    if metadata["model"]["architecture"] != ARCHITECTURE:
-        return VerificationResult(0, 0.0, (f"unsupported architecture {metadata['model']['architecture']!r}",))
 
     use_full_precision()
-    model = SpectrogramResNet(pretrained=False)
-    model.load_state_dict(torch.load(run_dir / MODEL_FILE, map_location="cpu", weights_only=True))
-    model.to(device)
+    model = load_model(run_dir).to(device)
 
     readable = []
     for row in read_csv(run_dir / PREDICTIONS_FILE):

@@ -13,6 +13,7 @@ ARTIFACT_SCHEMA_VERSION = 1
 RUN_METADATA = "run.json"
 MODEL_FILE = "model.pt"
 PREDICTIONS_FILE = "predictions.csv"
+PREPROCESSING_FILE = "preprocessing.toml"
 PREDICTION_COLUMNS = (
     "example_id", "image_path", "image_sha256", "recording_id", "fold", "split",
     "label", "faint", "probability", "baseline_probability",

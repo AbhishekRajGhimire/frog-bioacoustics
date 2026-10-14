@@ -26,6 +26,7 @@ from .artifact import (
     MODEL_FILE,
     PREDICTION_COLUMNS,
     PREDICTIONS_FILE,
+    PREPROCESSING_FILE,
     file_sha256,
     finish_run,
     start_run,
@@ -123,7 +124,7 @@ def train_and_save(
     # while it trains cannot leak into its saved record.
     inputs = {
         "manifest.csv": paths.manifest.read_bytes(),
-        "preprocessing.toml": preprocessing.source_path.read_bytes(),
+        PREPROCESSING_FILE: preprocessing.source_path.read_bytes(),
         "training.toml": training.source_path.read_bytes(),
     }
     source = _git_state(paths.repo_root)
