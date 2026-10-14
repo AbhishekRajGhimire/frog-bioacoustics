@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import struct
-from pathlib import Path
+from dataclasses import replace
+from pathlib import Path, PurePosixPath
 
 import numpy as np
+
+from frog_classifier.inference.store import RecordingRow, ScanIdentity
 
 
 AUDIOMOTH_COMMENT = (
@@ -36,3 +39,33 @@ def write_recording(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
     return path
+
+
+SCAN_IDENTITY = ScanIdentity(
+    input_root="D:/recordings/site-a",
+    model_run="resnet18-20261014T114432Z",
+    model_sha256="a" * 64,
+    threshold=0.5,
+    preprocessing_sha256="b" * 64,
+    chunk_seconds=5,
+)
+
+
+def recording_row(path: str, **changes: object) -> RecordingRow:
+    """A successfully processed two-window recording, with any fields replaced."""
+    row = RecordingRow(
+        path=path,
+        recording_id=PurePosixPath(path).stem,
+        started_at="2022-01-23T01:00:00",
+        utc_offset="+11:00",
+        size_bytes=1000,
+        audio_sha256="c" * 64,
+        duration_s=10.0,
+        windows=2,
+        status="ok",
+        message=None,
+        render_seconds=0.5,
+        predict_seconds=0.01,
+        processed_at="2026-10-15T00:00:00Z",
+    )
+    return replace(row, **changes)
