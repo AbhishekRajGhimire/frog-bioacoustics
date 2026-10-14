@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
 import platform
-import shutil
 import subprocess
 import time
 from dataclasses import asdict, dataclass
@@ -119,6 +119,14 @@ def train_and_save(
     training = load_training_config(paths.training_config)
     rows = load_manifest(paths.manifest, paths.repo_root, preprocessing, label_root=paths.labeled_root)
     test_fold, val_fold = _manifest_folds(rows)
+    # Snapshot what this run trains on now, so a manifest rebuild or an edit made
+    # while it trains cannot leak into its saved record.
+    inputs = {
+        "manifest.csv": paths.manifest.read_bytes(),
+        "preprocessing.toml": preprocessing.source_path.read_bytes(),
+        "training.toml": training.source_path.read_bytes(),
+    }
+    source = _git_state(paths.repo_root)
     created_at = clock()
     name = f"{ARCHITECTURE}-{created_at:%Y%m%dT%H%M%SZ}"
     staging = start_run(paths.models_root, name)
@@ -138,9 +146,10 @@ def train_and_save(
     seconds = time.perf_counter() - started
 
     metadata = _metadata(
-        name, created_at, data, rotations, training, preprocessing, paths, device, seconds, cross_validate,
+        name, created_at, data, rotations, training, preprocessing, paths, inputs, source,
+        device, seconds, cross_validate,
     )
-    _write_files(staging, data, rotations, training, preprocessing, paths, metadata, cross_validate)
+    _write_files(staging, data, rotations, inputs, metadata, cross_validate)
     return finish_run(staging, metadata)
 
 
@@ -230,6 +239,8 @@ def _metadata(
     training: TrainingConfig,
     preprocessing: PreprocessingConfig,
     paths: RunPaths,
+    inputs: dict[str, bytes],
+    source: dict[str, Any],
     device: torch.device,
     seconds: float,
     cross_validate: bool,
@@ -282,7 +293,7 @@ def _metadata(
             },
         },
         "checksums": {
-            "manifest": file_sha256(paths.manifest),
+            "manifest": hashlib.sha256(inputs["manifest.csv"]).hexdigest(),
             "preprocessing_config": preprocessing.sha256,
             "training_config": training.sha256,
             "uv_lock": file_sha256(uv_lock) if uv_lock.is_file() else None,
@@ -296,7 +307,7 @@ def _metadata(
             "cudnn": torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else None,
             "platform": platform.platform(),
         },
-        "source": _git_state(paths.repo_root),
+        "source": source,
         "metrics": {
             "resnet": {
                 "validation": asdict(evaluate(labels[val], primary.resnet[val], primary.resnet_threshold)),
@@ -382,17 +393,14 @@ def _write_files(
     staging: Path,
     data: _Dataset,
     rotations: list[_Rotation],
-    training: TrainingConfig,
-    preprocessing: PreprocessingConfig,
-    paths: RunPaths,
+    inputs: dict[str, bytes],
     metadata: dict[str, Any],
     cross_validate: bool,
 ) -> None:
     primary = rotations[0]
     torch.save({key: value.cpu() for key, value in primary.fit.model.state_dict().items()}, staging / MODEL_FILE)
-    shutil.copyfile(preprocessing.source_path, staging / "preprocessing.toml")
-    shutil.copyfile(training.source_path, staging / "training.toml")
-    shutil.copyfile(paths.manifest, staging / "manifest.csv")
+    for name, content in inputs.items():
+        (staging / name).write_bytes(content)
     write_csv(staging / PREDICTIONS_FILE, PREDICTION_COLUMNS, (
         {
             "example_id": row.example_id,

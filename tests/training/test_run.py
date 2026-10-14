@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -121,6 +122,30 @@ class SingleRunTests(unittest.TestCase):
         metadata = read_run(train_and_save(paths, cross_validate=False, device=CPU, progress=_quiet))
 
         self.assertEqual(metadata["data"]["faint_tagged_frog_clips"], 0)
+
+    def test_records_inputs_and_source_as_they_were_when_training_started(self) -> None:
+        paths = build_synthetic_repo(self.root)
+        git = ["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "core.autocrlf=false"]
+        subprocess.run([*git, "init", "-q"], cwd=self.root, check=True)
+        subprocess.run([*git, "add", "-A"], cwd=self.root, check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "synthetic"], cwd=self.root, check=True)
+        original_manifest = paths.manifest.read_bytes()
+        original_training = paths.training_config.read_bytes()
+
+        def edit_inputs_mid_run(message: str) -> None:
+            # A manifest rebuild or a config edit while the model trains must not leak into the record.
+            if message.startswith("epoch") and paths.manifest.read_bytes() == original_manifest:
+                paths.manifest.write_bytes(original_manifest + b"\n")
+                paths.training_config.write_bytes(original_training + b"\n# edited\n")
+
+        run_dir = train_and_save(paths, cross_validate=False, device=CPU, progress=edit_inputs_mid_run)
+
+        metadata = read_run(run_dir)
+        self.assertEqual((run_dir / "manifest.csv").read_bytes(), original_manifest)
+        self.assertEqual((run_dir / "training.toml").read_bytes(), original_training)
+        self.assertEqual(metadata["checksums"]["manifest"], hashlib.sha256(original_manifest).hexdigest())
+        self.assertFalse(metadata["source"]["git_worktree_dirty"])
+        self.assertEqual(len(metadata["source"]["git_commit"]), 40)
 
     def test_refuses_an_existing_run_folder_before_training(self) -> None:
         paths = build_synthetic_repo(self.root)
