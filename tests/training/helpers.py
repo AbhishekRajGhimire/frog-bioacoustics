@@ -1,5 +1,20 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+from PIL import Image
+
+from frog_classifier.data.manifest import ManifestRow, serialize_manifest
+from frog_classifier.labeling.decisions import LOG_NAME, DecisionLog
+from tests.data.helpers import load_test_config
+
+if TYPE_CHECKING:
+    from frog_classifier.training.run import RunPaths
+
+
+IMAGE_SHAPE = (128, 216)
 
 TRAINING_CONFIG = b'''schema_version = 1
 seed = 7
@@ -91,3 +106,63 @@ def example_metadata(*, cross_validation: bool) -> dict:
             else None
         ),
     }
+
+
+def build_synthetic_repo(
+    repo_root: Path,
+    *,
+    test_fold: int = 0,
+    val_fold: int = 1,
+    faint_log: bool = True,
+) -> RunPaths:
+    """Five folds, each with one frog and one background recording of two clips.
+
+    Frog clips carry a bright band where a call would sit; the first frog clip of
+    the test fold is tagged faint in the decision log when faint_log is true.
+    """
+    # Imported here so the configuration helpers above stay usable without the run module.
+    from frog_classifier.training.run import RunPaths
+
+    config = load_test_config(repo_root)
+    training_path = repo_root / "config" / "training.toml"
+    training_path.write_bytes(TRAINING_CONFIG)
+    labeled = repo_root / "labeled"
+    rng = np.random.default_rng(0)
+    rows = []
+    for fold in range(5):
+        split = "test" if fold == test_fold else "val" if fold == val_fold else "train"
+        for label_name, label, hour in (("litoria_aurea", 1, 2), ("non_target", 0, 22)):
+            recording_id = f"2022010{fold + 1}_{hour:02d}0000"
+            for start_s in (0, 5):
+                example_id = f"{recording_id}_start{start_s}s"
+                image_path = f"labeled/{label_name}/{example_id}.png"
+                pixels = rng.integers(0, 40, IMAGE_SHAPE, dtype=np.uint8)
+                if label:
+                    pixels[60:70, :] = 220
+                (repo_root / image_path).parent.mkdir(parents=True, exist_ok=True)
+                Image.fromarray(pixels).save(repo_root / image_path)
+                rows.append(ManifestRow(
+                    manifest_version=1,
+                    example_id=example_id,
+                    image_path=image_path,
+                    label=label,
+                    label_name=label_name,
+                    recording_id=recording_id,
+                    start_s=start_s,
+                    fold=fold,
+                    split=split,
+                    preprocessing_config_sha256=config.sha256,
+                ))
+    manifest = labeled / "manifest.csv"
+    manifest.write_bytes(serialize_manifest(tuple(rows)))
+    if faint_log:
+        faint_clip = next(row for row in rows if row.fold == test_fold and row.label == 1)
+        DecisionLog(labeled / LOG_NAME).append(faint_clip.example_id, "litoria_aurea", "label", faint=True)
+    return RunPaths(
+        repo_root=repo_root,
+        manifest=manifest,
+        preprocessing_config=repo_root / "config" / "preprocessing.toml",
+        training_config=training_path,
+        labeled_root=labeled,
+        models_root=repo_root / "models",
+    )
