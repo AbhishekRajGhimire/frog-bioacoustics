@@ -103,6 +103,11 @@ EXPECTED_RUNTIME_REQUIREMENTS = {
     "tqdm>=4.67,<4.68",
 }
 
+MODEL_GROUP_REQUIREMENTS = {
+    "torch>=2.14,<2.15",
+    "torchvision>=0.29,<0.30",
+}
+
 OPERATIONAL_TEXT_FILES = (
     "README.md",
     "docs/outline.md",
@@ -211,6 +216,20 @@ class DependencyMetadataTests(unittest.TestCase):
             if line and not line.startswith(("#", "-")) and "==" in line
         }
         self.assertTrue(RUNTIME_DEPENDENCIES.issubset(exported_names))
+
+        self.assertEqual(set(pyproject["dependency-groups"]["model"]), MODEL_GROUP_REQUIREMENTS)
+        self.assertEqual(pyproject["tool"]["uv"]["default-groups"], ["model"])
+        indexes = {index["name"]: index for index in pyproject["tool"]["uv"]["index"]}
+        self.assertEqual(indexes["pytorch-cu130"]["url"], "https://download.pytorch.org/whl/cu130")
+        self.assertTrue(indexes["pytorch-cu130"]["explicit"])
+        for package in ("torch", "torchvision"):
+            with self.subTest(source=package):
+                sources = pyproject["tool"]["uv"]["sources"][package]
+                self.assertEqual({source["index"] for source in sources}, {"pytorch-cu130"})
+        # The launcher installs this export with pip; PyTorch would add gigabytes it never uses.
+        export_text = export_path.read_text(encoding="utf-8")
+        self.assertIn("--no-default-groups", export_text)
+        self.assertTrue({"torch", "torchvision"}.isdisjoint(exported_names))
 
         launcher = (REPO_ROOT / "Launch_Labeler.bat").read_text(encoding="utf-8")
         self.assertIn("py -3.13", launcher)
