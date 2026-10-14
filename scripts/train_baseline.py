@@ -20,11 +20,11 @@ from typing import Iterable
 
 import numpy as np
 from PIL import Image
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 from frog_classifier.data.config import load_preprocessing_config
 from frog_classifier.data.manifest import load_manifest
+from frog_classifier.training.baseline import baseline_features, fit_baseline
 
 
 @dataclass(frozen=True)
@@ -35,13 +35,13 @@ class Example:
 
 
 def featurize(paths: Iterable[Path], *, size: int) -> np.ndarray:
-    feats: list[np.ndarray] = []
-    for p in paths:
-        img = Image.open(p).convert("L")  # grayscale
-        img = img.resize((size, size))
-        x = np.asarray(img, dtype=np.float32) / 255.0
-        feats.append(x.reshape(-1))
-    return np.stack(feats, axis=0)
+    return baseline_features(_grayscale_images(paths), size=size)
+
+
+def _grayscale_images(paths: Iterable[Path]) -> Iterable[Image.Image]:
+    for path in paths:
+        with Image.open(path) as image:
+            yield image.convert("L")
 
 
 def eval_split(name: str, y_true: np.ndarray, y_pred: np.ndarray) -> None:
@@ -89,13 +89,7 @@ def main() -> int:
 
     X_train = featurize([e.path for e in train], size=int(args.size))
 
-    clf = LogisticRegression(
-        C=float(args.C),
-        max_iter=2000,
-        class_weight="balanced",
-        n_jobs=None,
-    )
-    clf.fit(X_train, y_train)
+    clf = fit_baseline(X_train, y_train, inverse_regularization=float(args.C))
 
     # Train metrics (sanity check)
     eval_split("train", y_train, clf.predict(X_train))

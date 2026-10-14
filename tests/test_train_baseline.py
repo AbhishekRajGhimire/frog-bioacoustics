@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import numpy as np
 from PIL import Image
+from sklearn.linear_model import LogisticRegression
 
 from frog_classifier.data.manifest import ManifestRow, serialize_manifest
 from frog_classifier.data.validation import ManifestValidationError
@@ -42,7 +43,7 @@ class TrainBaselineManifestTests(unittest.TestCase):
             classifier.n_features_in_ = features.shape[1]
             return classifier
 
-        with patch.object(module.LogisticRegression, "fit", autospec=True, side_effect=fit):
+        with patch.object(LogisticRegression, "fit", autospec=True, side_effect=fit):
             self.assertEqual(self._run_main(module, manifest_path), 0)
 
         self.assertEqual(len(fitted), 1)
@@ -101,7 +102,7 @@ class TrainBaselineManifestTests(unittest.TestCase):
         manifest_path = self._write_manifest(rows)
         module = self._load_module()
 
-        with patch.object(module.LogisticRegression, "fit", autospec=True) as fit:
+        with patch.object(LogisticRegression, "fit", autospec=True) as fit:
             with self.assertRaises(ManifestValidationError):
                 self._run_main(module, manifest_path)
 
