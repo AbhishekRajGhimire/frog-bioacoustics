@@ -12,7 +12,7 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from frog_classifier.app.paths import ROOT_VARIABLE
-from frog_classifier.app.scans import STOP_FILE, ScanStatus, utc_timestamp, write_status
+from frog_classifier.app.scans import STOP_FILE, ScanStatus, launch_scan_process, utc_timestamp, write_status
 from tests.analytics.helpers import build_record, recording
 from tests.inference.helpers import AUDIOMOTH_COMMENT, build_saved_run, write_recording
 from tests.preprocessing.helpers import noise
@@ -95,14 +95,22 @@ class InterfaceTests(unittest.TestCase):
     def test_a_scan_runs_to_the_end_and_opens_its_results(self) -> None:
         app = self._app()
         app.text_input(key="folder").set_value(str(self.card)).run()
+        launched = []
 
-        app.button(key="scan").click().run()
+        def launch(*args, **kwargs):
+            launched.append(launch_scan_process(*args, **kwargs))
+            return launched[-1]
+
+        with patch("frog_classifier.app.deployments.launch_scan_process", side_effect=launch):
+            app.button(key="scan").click().run()
         deadline = time.monotonic() + SCAN_TIMEOUT_S
         while "finished" not in self._texts(app.success):
             self._assert_no_exception(app)
             self.assertLess(time.monotonic(), deadline, "the scan did not finish in time")
             time.sleep(1)
             app.run()
+        # The status reads finished just before the process exits and releases scan.log.
+        self.assertEqual(launched[0].wait(timeout=SCAN_TIMEOUT_S), 0)
         app.button(key="view_results").click().run()
 
         self.assertEqual(app.radio(key="view").value, "Results")
