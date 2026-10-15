@@ -243,6 +243,7 @@ uv run python scripts/detect_calls.py models/<run folder> raw/external --workers
 ```
 
 On the RTX 4080 laptop with 32 logical CPUs, the 618 five-minute recordings in `raw/external`, 51.5 hours of audio, took 427 seconds with one worker, 126 seconds with four, 76 seconds with eight, and 94 seconds with sixteen, so the default of eight was the fastest.
+Later runs with eight workers on the same laptop took 120 to 135 seconds after a long stretch of full-CPU work, so expect one to two minutes for that much audio.
 Rendering takes nearly all of that time; prediction took about 14 seconds in total.
 Every worker count stored exactly the same probabilities, and for all 4,224 labeled clips the detection probability matched the saved run's own prediction within 0.000004.
 Each worker process uses about 250 MB of memory for five-minute recordings; longer recordings need proportionally more, so lower `--workers` if memory runs short.

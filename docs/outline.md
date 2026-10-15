@@ -30,7 +30,7 @@ The result held when whole nights were held out.
 Every label comes from one site between January and March, recorded between midnight and noon, so performance elsewhere is still unknown.
 
 Phase 5 made the detector usable on whole folders of recordings.
-It scanned all 618 recordings, 51.5 hours of audio, in about 76 seconds, and it can be stopped and restarted without losing or repeating work.
+It scanned all 618 recordings, 51.5 hours of audio, in one to two minutes, and it can be stopped and restarted without losing or repeating work.
 
 Phase 6, activity analysis and a user-facing application, is next, and labeling continues for other sites and seasons.
 

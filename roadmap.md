@@ -224,7 +224,8 @@ Verified on October 15, 2026 with run `models/resnet18-20261014T114432Z` over al
 - Runs with one, four, eight, and sixteen worker processes stored exactly the same probabilities, and for all 4,224 labeled clips the detection probability matched the saved run's own prediction within 0.000004.
 - A run killed outright twice, after 210 and 402 recordings, resumed each time without repeating or duplicating a recording, and the finished record was identical to an uninterrupted run.
 - Every `detections.csv` row names the recording path, window, clock time, UTC offset, probability, threshold, run name, model checksum, and preprocessing checksum.
-- The 51.5 hours of audio took 76 seconds with the default eight workers on the RTX 4080 laptop, about 2,400 times real time, against 427 seconds with one worker; rendering takes nearly all of the time.
+- The 51.5 hours of audio took 76 seconds with the default eight workers on the RTX 4080 laptop, about 2,400 times real time, against 427 seconds with one worker; later eight-worker runs took up to 135 seconds after a long stretch of full-CPU work, and rendering takes nearly all of the time.
+- Resuming checks a 64 KiB fingerprint of every stored recording and refuses to continue if a different file sits under a stored name, so a second memory card with the same file names is never skipped as already done; a run with nothing new took 12 seconds.
 - Detections fall from about a third of all windows between midnight and 03:00 to 6% at 11:00, matching the calling pattern in the labels.
 
 The roadmap planned CSV first and SQLite later, but resumable processing settled it now: one SQLite transaction per recording leaves only whole recordings after any interruption, and the CSV files are rewritten from the database at the end of every run.
