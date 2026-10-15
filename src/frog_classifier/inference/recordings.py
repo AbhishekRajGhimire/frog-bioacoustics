@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import struct
 from dataclasses import dataclass
@@ -24,6 +25,9 @@ _AUDIOMOTH_TIME = re.compile(
 )
 # An INFO list holds a few short text fields; anything larger is not worth reading.
 _MAX_LIST_BYTES = 1 << 20
+# Enough of a file to tell two recordings apart: the recorder's header, with its
+# serial number and clock, and the first moments of audio.
+_HEAD_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,12 @@ def find_recordings(input_root: Path) -> list[str]:
         for path in input_root.rglob("*")
         if path.suffix.lower() in AUDIO_SUFFIXES and path.is_file()
     )
+
+
+def file_head_sha256(path: Path) -> str:
+    """SHA-256 of a file's first 64 KiB: a cheap check that a stored recording is still the same file."""
+    with path.open("rb") as handle:
+        return hashlib.sha256(handle.read(_HEAD_BYTES)).hexdigest()
 
 
 def recording_time(path: Path) -> RecordingTime:

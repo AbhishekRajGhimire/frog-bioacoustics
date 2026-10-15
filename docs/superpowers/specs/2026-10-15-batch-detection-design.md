@@ -87,7 +87,8 @@ Times are stored as local ISO 8601 text without an offset, beside the offset as 
 ### Resume and failure
 
 Recordings are identified by their path relative to the input folder, in POSIX form, and processed in sorted path order.
-A recording stored with status `ok` is skipped on the next run.
+A recording stored with status `ok` is skipped on the next run, after a check that the file under that name is still the same file: the SHA-256 of its first 64 KiB, stored as `head_sha256`, must match, because recorders on the same schedule write identical file names on every card.
+An input folder without a name, such as a drive root, has no default output folder and needs `--output`.
 A recording that failed is stored with status `failed` and the error message, and is retried on the next run, replacing its earlier row.
 Errors while reading, hashing, or rendering a recording count as that recording's failure; errors in prediction, in the database, or in a worker process stop the run, which can then be resumed.
 A recording shorter than one window is stored as `ok` with zero windows and a message.
@@ -130,6 +131,7 @@ CREATE TABLE recordings (
     utc_offset TEXT,
     size_bytes INTEGER,
     audio_sha256 TEXT,
+    head_sha256 TEXT,
     duration_s REAL,
     windows INTEGER NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('ok', 'failed')),

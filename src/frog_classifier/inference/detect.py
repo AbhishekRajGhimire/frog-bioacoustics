@@ -21,7 +21,7 @@ from frog_classifier.training.fit import predict_probabilities, use_full_precisi
 from frog_classifier.training.saved import SavedRun, load_saved_run
 
 from .export import ExportError, export_csv
-from .recordings import find_recordings
+from .recordings import file_head_sha256, find_recordings
 from .rendering import RenderedRecording, RenderJob, render_for_detection, start_render_worker
 from .store import DATABASE_FILE, DetectionStore, RecordingRow, ScanIdentity
 
@@ -86,7 +86,13 @@ def default_workers() -> int:
 
 
 def default_output_dir(results_root: Path, input_root: Path, run_name: str) -> Path:
-    return results_root / f"{input_root.resolve().name}-{run_name}"
+    name = input_root.resolve().name
+    if not name:
+        raise DetectionError(
+            f"{input_root} has no folder name to label its results with; "
+            "name an output folder with --output, one for each card or deployment"
+        )
+    return results_root / f"{name}-{run_name}"
 
 
 def utc_now() -> datetime:
@@ -124,7 +130,8 @@ def detect_calls(
     store = DetectionStore.open(output_dir / DATABASE_FILE, _scan_identity(saved, input_root), now=_timestamp(clock()))
     with store:
         found = find_recordings(input_root)
-        done = store.finished_paths()
+        done = store.finished_recordings()
+        _refuse_changed_recordings(input_root, output_dir, found, done)
         jobs = [RenderJob(input_root, path, saved.preprocessing) for path in found if path not in done]
         on_start(len(jobs), len(found) - len(jobs))
         use_full_precision()
@@ -179,6 +186,26 @@ def _scan_identity(saved: SavedRun, input_root: Path) -> ScanIdentity:
     )
 
 
+def _refuse_changed_recordings(
+    input_root: Path,
+    output_dir: Path,
+    found: list[str],
+    done: dict[str, str | None],
+) -> None:
+    """Refuse to continue when a different file sits under a name already stored.
+
+    Recorders on the same schedule write identical file names, so a second memory
+    card read from the same drive would otherwise be skipped as already done.
+    """
+    changed = [path for path in found if path in done and file_head_sha256(input_root / path) != done[path]]
+    if changed:
+        raise DetectionError(
+            f"{len(changed)} recordings in {input_root} differ from the recordings already stored "
+            f"under the same names in {output_dir}, for example {changed[0]}; "
+            "choose another output folder for these recordings"
+        )
+
+
 def _render_in_order(jobs: list[RenderJob], workers: int) -> Iterator[RenderedRecording]:
     """Rendered recordings in job order.
 
@@ -226,6 +253,7 @@ def _recording_row(rendered: RenderedRecording, predict_seconds: float, processe
         utc_offset=rendered.utc_offset,
         size_bytes=rendered.size_bytes,
         audio_sha256=rendered.audio_sha256,
+        head_sha256=rendered.head_sha256,
         duration_s=rendered.duration_s,
         windows=len(rendered.window_starts),
         status="failed" if rendered.error is not None else "ok",

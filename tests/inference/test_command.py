@@ -81,6 +81,12 @@ class DetectCommandTests(unittest.TestCase):
         self.assertIn("FAILED 20220123_030000.wav", output)
         self.assertIn("Run the same command again to retry them.", errors)
 
+    def test_a_drive_root_without_an_output_folder_cannot_start(self) -> None:
+        code, _, errors = _run(self.command, f"models/{self.run_dir.name}", self.repo.anchor, "--device", "cpu")
+
+        self.assertEqual(code, 2)
+        self.assertIn("has no folder name", errors)
+
     def test_a_folder_that_is_not_a_run_cannot_start(self) -> None:
         code, _, errors = _run(self.command, "models", "raw/site", "--workers", "1", "--device", "cpu")
 

@@ -70,6 +70,7 @@ def recording_row(path: str, **changes: object) -> RecordingRow:
         utc_offset="+11:00",
         size_bytes=1000,
         audio_sha256="c" * 64,
+        head_sha256="d" * 64,
         duration_s=10.0,
         windows=2,
         status="ok",

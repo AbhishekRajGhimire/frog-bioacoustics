@@ -162,7 +162,8 @@ Worker processes are spawned rather than forked, ignore Ctrl+C, never import PyT
 The main process alone owns the GPU and the database connection, stores results in path order, and lets at most two rendered recordings per worker wait in memory.
 
 The database's `scan` row records the absolute input folder, run name, model checksum, threshold, preprocessing checksum, and window length; reopening it for anything different is refused, so one database never mixes results.
-`recordings` holds each recording's relative path, identifier, start time, UTC offset, size, audio checksum, duration, window count, status, message, and timings, and `windows` holds every window's start and probability.
+`recordings` holds each recording's relative path, identifier, start time, UTC offset, size, audio checksum, head checksum, duration, window count, status, message, and timings, and `windows` holds every window's start and probability.
+The head checksum covers a file's first 64 KiB, which holds the recorder's serial number, clock, and first moments of audio; before resuming, the command compares it for every stored recording and refuses to continue if a different file now sits under a stored name, because recorders on the same schedule write identical file names on every card.
 A window is a detection when its probability is at or above the run's threshold; that comparison happens at export rather than being stored, so a different threshold needs no re-run.
 A recording and all of its windows are written in one transaction, so an interruption leaves only whole recordings, and the next run skips every recording stored as `ok` and retries every one stored as `failed`.
 

@@ -30,7 +30,7 @@ class ExportTests(unittest.TestCase):
         self.store.save(
             recording_row(
                 FAILED_PATH, windows=0, status="failed", message="LibsndfileError: bad header",
-                started_at=None, utc_offset=None, duration_s=None, audio_sha256=None,
+                started_at=None, utc_offset=None, duration_s=None, audio_sha256=None, head_sha256=None,
             ),
             (),
             (),

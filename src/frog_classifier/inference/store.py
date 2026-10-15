@@ -36,6 +36,7 @@ _TABLES = (
         utc_offset TEXT,
         size_bytes INTEGER,
         audio_sha256 TEXT,
+        head_sha256 TEXT,
         duration_s REAL,
         windows INTEGER NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('ok', 'failed')),
@@ -77,6 +78,7 @@ class RecordingRow:
     utc_offset: str | None
     size_bytes: int | None
     audio_sha256: str | None
+    head_sha256: str | None
     duration_s: float | None
     windows: int
     status: str
@@ -124,10 +126,11 @@ class DetectionStore:
     def __exit__(self, *exception: object) -> None:
         self.close()
 
-    def finished_paths(self) -> set[str]:
-        """Recordings stored successfully; a failed recording is not finished and is retried."""
-        rows = self._connection.execute("SELECT path FROM recordings WHERE status = 'ok'")
-        return {path for (path,) in rows}
+    def finished_recordings(self) -> dict[str, str | None]:
+        """The head checksum of every recording stored successfully, by path; a
+        failed recording is not finished and is retried."""
+        rows = self._connection.execute("SELECT path, head_sha256 FROM recordings WHERE status = 'ok'")
+        return dict(rows.fetchall())
 
     def save(self, recording: RecordingRow, window_starts: Sequence[int], probabilities: Sequence[float]) -> None:
         """Store one recording with all of its windows, replacing any earlier attempt."""

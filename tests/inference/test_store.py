@@ -78,7 +78,7 @@ class DetectionStoreTests(unittest.TestCase):
 
         self.assertEqual(reopened.recording_rows(), [recording_row("site/a.wav")])
         self.assertEqual(reopened.windows(), [("site/a.wav", 0, 0.25), ("site/a.wav", 5, 0.75)])
-        self.assertEqual(reopened.finished_paths(), {"site/a.wav"})
+        self.assertEqual(reopened.finished_recordings(), {"site/a.wav": "d" * 64})
 
     def test_a_save_that_fails_partway_stores_nothing(self) -> None:
         store = self._open()
@@ -92,7 +92,7 @@ class DetectionStoreTests(unittest.TestCase):
     def test_a_retried_recording_replaces_its_failed_attempt(self) -> None:
         store = self._open()
         store.save(recording_row("site/a.wav", windows=0, status="failed", message="OSError: busy"), (), ())
-        self.assertEqual(store.finished_paths(), set())
+        self.assertEqual(store.finished_recordings(), {})
 
         store.save(recording_row("site/a.wav"), (0, 5), (0.25, 0.75))
 

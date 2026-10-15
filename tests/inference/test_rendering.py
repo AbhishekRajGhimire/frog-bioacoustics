@@ -54,6 +54,7 @@ class RenderForDetectionTests(unittest.TestCase):
         self.assertEqual(rendered.utc_offset, "+11:00")
         self.assertEqual(rendered.size_bytes, source.stat().st_size)
         self.assertEqual(rendered.audio_sha256, hashlib.sha256(source.read_bytes()).hexdigest())
+        self.assertEqual(rendered.head_sha256, hashlib.sha256(source.read_bytes()[:65536]).hexdigest())
         self.assertAlmostEqual(rendered.duration_s, 12.0, places=3)
         self.assertEqual(rendered.notes, ())
         self.assertGreater(rendered.render_seconds, 0.0)

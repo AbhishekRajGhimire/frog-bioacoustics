@@ -185,6 +185,14 @@ class DetectCallsTests(unittest.TestCase):
         with self.assertRaisesRegex(StoreError, "different model_run, model_sha256"):
             detect_calls(other, self.input_root, self.output, device=CPU, workers=1)
 
+    def test_a_different_recording_under_a_stored_name_is_refused(self) -> None:
+        self._detect()
+        # Recorders on the same schedule write the same file names on every card.
+        write_recording(self.input_root / "20220123_020000.WAV", noise(10, sample_rate_hz=48000, seed=9))
+
+        with self.assertRaisesRegex(DetectionError, "differ from the recordings already stored.*20220123_020000.WAV"):
+            self._detect()
+
     def test_an_output_folder_inside_the_input_folder_is_refused(self) -> None:
         with self.assertRaisesRegex(DetectionError, "must not lie inside the input folder"):
             self._detect(self.input_root / "results")
@@ -200,6 +208,10 @@ class DetectCallsTests(unittest.TestCase):
             default_output_dir(self.root / "results", self.input_root, "resnet18-x"),
             self.root / "results" / "site-resnet18-x",
         )
+
+    def test_a_drive_root_needs_an_output_folder_named_for_it(self) -> None:
+        with self.assertRaisesRegex(DetectionError, "has no folder name"):
+            default_output_dir(self.root / "results", Path(self.root.anchor), "resnet18-x")
 
 
 if __name__ == "__main__":

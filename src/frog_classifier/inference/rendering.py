@@ -23,7 +23,7 @@ from frog_classifier.data.config import PreprocessingConfig
 from frog_classifier.preprocessing import ChunkImage, load_waveform, render_waveform_images
 from frog_classifier.training.images import expected_image_shape
 
-from .recordings import RecordingTime, recording_time
+from .recordings import RecordingTime, file_head_sha256, recording_time
 
 
 _HASH_BLOCK_BYTES = 1 << 20
@@ -44,6 +44,7 @@ class RenderedRecording:
     utc_offset: str | None
     size_bytes: int | None
     audio_sha256: str | None
+    head_sha256: str | None
     duration_s: float | None
     window_starts: tuple[int, ...]
     images: np.ndarray
@@ -81,6 +82,7 @@ def render_for_detection(job: RenderJob) -> RenderedRecording:
     source = job.input_root / job.path
     size_bytes: int | None = None
     audio_sha256: str | None = None
+    head_sha256: str | None = None
     duration_s: float | None = None
     error: str | None = None
     timing = RecordingTime(None, None, ())
@@ -88,6 +90,7 @@ def render_for_detection(job: RenderJob) -> RenderedRecording:
     try:
         size_bytes = source.stat().st_size
         audio_sha256 = _file_sha256(source)
+        head_sha256 = file_head_sha256(source)
         timing = recording_time(source)
         waveform = load_waveform(source, job.config)
         duration_s = len(waveform) / job.config.audio.sample_rate_hz
@@ -108,6 +111,7 @@ def render_for_detection(job: RenderJob) -> RenderedRecording:
         utc_offset=timing.utc_offset,
         size_bytes=size_bytes,
         audio_sha256=audio_sha256,
+        head_sha256=head_sha256,
         duration_s=duration_s,
         window_starts=tuple(chunk.start_s for chunk in chunks),
         images=images,

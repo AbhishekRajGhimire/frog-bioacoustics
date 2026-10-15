@@ -232,6 +232,8 @@ A recording's start time comes from the `YYYYMMDD_HHMMSS` timestamp in its file 
 A file that cannot be read is recorded as failed, the batch continues, and the command exits with 1.
 Running the same command again skips every recording already stored, retries failed ones, and rewrites both CSV files, so an interrupted run simply continues.
 An output folder belongs to one input folder, model, and preprocessing contract; the command refuses to mix results and asks for another `--output` folder instead.
+Give each recorder deployment or memory card its own output folder.
+Recorders on the same schedule write the same file names, so the command also refuses to continue when a different file appears under a name it has already stored, and a drive root such as `E:\` has no folder name, so it needs `--output`.
 A CSV file open in a spreadsheet program cannot be replaced; close it and run the command again.
 
 Recordings are rendered by several worker processes, by default half the logical CPUs and at most eight:
@@ -243,7 +245,7 @@ uv run python scripts/detect_calls.py models/<run folder> raw/external --workers
 On the RTX 4080 laptop with 32 logical CPUs, the 618 five-minute recordings in `raw/external`, 51.5 hours of audio, took 427 seconds with one worker, 126 seconds with four, 76 seconds with eight, and 94 seconds with sixteen, so the default of eight was the fastest.
 Rendering takes nearly all of that time; prediction took about 14 seconds in total.
 Every worker count stored exactly the same probabilities, and for all 4,224 labeled clips the detection probability matched the saved run's own prediction within 0.000004.
-Each worker process uses about 250 MB of memory for five-minute recordings.
+Each worker process uses about 250 MB of memory for five-minute recordings; longer recordings need proportionally more, so lower `--workers` if memory runs short.
 If the command is killed outright, its workers exit on their own, and the next run continues from the last complete recording.
 
 ## Verify Phase 2 acceptance

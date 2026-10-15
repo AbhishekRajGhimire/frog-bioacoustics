@@ -42,11 +42,11 @@ def main() -> int:
 
     run_dir = _resolve(repo_root, args.run)
     input_root = _resolve(repo_root, args.input)
-    if args.output is not None:
-        output_dir = _resolve(repo_root, args.output)
-    else:
-        output_dir = default_output_dir(repo_root / "results" / "detections", input_root, run_dir.name)
     try:
+        if args.output is not None:
+            output_dir = _resolve(repo_root, args.output)
+        else:
+            output_dir = default_output_dir(repo_root / "results" / "detections", input_root, run_dir.name)
         device = select_device(args.device)
     except ValueError as error:
         return _cannot_start(error)

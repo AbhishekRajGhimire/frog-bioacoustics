@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import unittest
 from datetime import datetime
@@ -8,6 +9,7 @@ from pathlib import Path
 from frog_classifier.inference.recordings import (
     NO_START_TIME,
     audiomoth_comment,
+    file_head_sha256,
     find_recordings,
     recording_time,
 )
@@ -34,6 +36,19 @@ class FindRecordingsTests(unittest.TestCase):
                 find_recordings(root),
                 ["a/deeper/y.wav", "a/x.mp3", "b/20220102_000000.WAV", "c d/été 1.Wav"],
             )
+
+
+class FileHeadTests(unittest.TestCase):
+    def test_the_head_checksum_covers_exactly_the_first_64_kib(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "20220123_010000.WAV"
+            data = bytes(range(256)) * 400
+            path.write_bytes(data)
+            head = file_head_sha256(path)
+
+            self.assertEqual(head, hashlib.sha256(data[:65536]).hexdigest())
+            path.write_bytes(data[:65536] + b"later audio differs")
+            self.assertEqual(file_head_sha256(path), head)
 
 
 class RecordingTimeTests(unittest.TestCase):
