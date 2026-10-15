@@ -367,6 +367,7 @@ The zip is 475 MB and unzips to 31,965 files and 1.38 GB, with a longest path in
 Started with only the Windows folders on its path and a separate data folder, the package scanned the 83 recordings of `raw/external/IWS076-20260205T052512Z-1-001` in 69 seconds, with exactly the windows, probabilities, and 214 detections of `scripts/detect_calls.py --device cpu`.
 Closing its window during a scan of all 618 recordings of `raw/external` stopped every process; after a restart the deployment read as ended unexpectedly, and Continue scan finished the other 557.
 The finished record matched the graphics-card scan of Phase 5 to within 0.00002 in every probability, with the same 8,080 detections, and nothing was written into the package except numba's caches for librosa.
+The review's fixes changed only the launcher and the build; the package from commit `5586a68` has the same size and file count, and with it two starts at once gave one app, closing the window stopped everything, and starting again worked.
 
 ## Verify Phase 2 acceptance
 

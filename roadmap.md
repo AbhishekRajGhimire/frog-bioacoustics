@@ -18,7 +18,7 @@ Verified on October 14, 2026:
 - Saved models: 1 (`models/resnet18-20261014T114432Z`)
 - Detection records: 1 (`results/detections/external-resnet18-20261014T114432Z`, added October 15, 2026)
 - Analytics result artifacts: 1 (`results/analytics/external-resnet18-20261014T114432Z`, added October 15, 2026)
-- Site staff packages: 1 (`dist/FrogCallScanner-0.1.0-25fd224.zip`, built October 15, 2026)
+- Site staff packages: 1 (`dist/FrogCallScanner-0.1.0-5586a68.zip`, built October 15, 2026)
 - Active Git branch: `main`
 
 Every spectrogram was regenerated under preprocessing schema version 2 with per-recording noise-floor rendering, and a 100-image sample re-rendered from raw audio byte for byte.
@@ -294,6 +294,8 @@ The third part, the site staff package, was verified on October 15, 2026; the [d
 - The build of commit `25fd224` took 144 seconds and gave a 475 MB zip that unzips to 31,965 files and 1.38 GB, with a longest inside path of 154 characters.
 - Unzipped with Windows' Extract All and started with no Python or uv on its path, the package scanned 83 recordings in 69 seconds on the processor with exactly the detections of the command-line scan, and its results, charts, listening, and download worked.
 - Closing the window during a scan of all 618 recordings stopped every process; after a restart, Continue scan finished the other 557, and the record matched the Phase 5 graphics-card scan to within 0.00002 in every probability, with the same 8,080 detections.
+- The final review found that two quick starts could run two copies of the app, that a scanner answering for another Windows user would be opened as this one, and that the build could reuse an older build of the project; all three are fixed and tested.
+- The final package, built from commit `5586a68`, has the same size and file count; with it, two starts at once gave one app, closing the window stopped everything, and starting again worked.
 
 The package is not signed, so Windows warns about it until a person chooses Run anyway, and a computer without Microsoft's Visual C++ runtime must install it first, as the launcher explains.
 It was tested on the development laptop, where long paths are enabled, so the 260-character limit is guarded by the path budget rather than by a test on a computer with that limit.

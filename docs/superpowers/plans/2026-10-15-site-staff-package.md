@@ -1859,3 +1859,25 @@ Run the full suite, `git diff --check`, and the em dash scan over every changed 
 git add docs/architecture.md docs/workflow.md docs/outline.md README.md roadmap.md AGENTS.md tests/test_repository_reproducibility.py
 git commit -m "docs: describe the site staff package and complete Phase 6"
 ```
+
+## Execution record
+
+Executed inline on `main` on October 15, 2026, with a final self-review instead of a separate reviewer.
+
+Rulings made during execution:
+
+- `uv sync --frozen --dry-run` after Task 1 listed only `frog-classifier` itself for reinstall, because `pyproject.toml` changed; no dependency changed and the development PyTorch stayed `+cu130`.
+- Reading the generated instructions showed the data folder wrapped across two lines, so it could not be pasted whole; it now sits alone on an indented line, with a test.
+- The full suite failed 71 tests because `tests/packaging`, made in Task 4, hid the `packaging` library that librosa needs under test discovery, which targeted runs from the repository root did not show; the folder is now `tests/site_staff_package`, and a test refuses any test folder named like an installed library.
+- The final review found that two starts during a slow first start ran two copies of the app, and that a scanner answering on port 8571, such as another Windows user's, was opened as this one; a lock in the data folder, freed by the operating system when its launcher ends, now decides whether the scanner is already open, and the port is written beside it in a file of its own, because Windows refuses reads that overlap a locked byte.
+- Rebuilding after that fix showed that the build reused uv's cached build of the project, which uv renews only when `pyproject.toml` changes, so the package carried the old launcher under the new commit; the build now rebuilds the project every time and refuses a package whose installed code differs from `src/frog_classifier`. The accepted package from commit `25fd224` matched its commit exactly.
+- The final package was built from commit `5586a68`, and two starts at once, closing the window, and starting again were checked again with its launcher; the older zips were removed from `dist/`.
+
+Deferred minor items:
+
+- The first time-left estimate of a processor scan counts start-up time, so it reads high at first, about 39 minutes after 3 of 618 recordings.
+- The zip carries numba caches for librosa made by the build's self-check scan; numba checks and refreshes them, so they are harmless but make the zip depend on the build computer.
+- A first start slower than 120 seconds, on an old computer whose antivirus checks every new file, is reported as not answering; starting again then works.
+- `dist/` keeps the zip of every earlier commit until it is removed by hand.
+- A port held only on `[::1]` by another program reads as free, and the app then fails to start with Streamlit's message.
+- Smart App Control on Windows 11 may block the unsigned Python; this could not be tested here, and signing stays a separate decision.
