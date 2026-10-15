@@ -16,7 +16,8 @@ A person reviews those images and matching audio clips.
 Confident target calls become `litoria_aurea` examples, confident non-target sounds become `non_target` examples, and uncertain clips are skipped.
 
 The validated labels train and evaluate a ResNet-18 detector, which then scans whole folders of recordings and records how likely every five-second window is to hold a frog call.
-Future phases will add activity analysis and a user-facing application.
+An analysis step turns those probabilities into calling activity by hour of day and by date, always beside how much was recorded.
+A future phase will put the whole workflow in an application for site staff.
 
 ## Current status
 
@@ -32,7 +33,9 @@ Every label comes from one site between January and March, recorded between midn
 Phase 5 made the detector usable on whole folders of recordings.
 It scanned all 618 recordings, 51.5 hours of audio, in one to two minutes, and it can be stopped and restarted without losing or repeating work.
 
-Phase 6, activity analysis and a user-facing application, is next, and labeling continues for other sites and seasons.
+Phase 6 is in progress.
+Its first part, activity analysis, is done: one command turns a detection record into a report, three figures, and traceable tables.
+The application for site staff and its packaging come next, and labeling continues for other sites and seasons.
 
 See the [roadmap](../roadmap.md) for the complete sequence of project phases.
 
@@ -47,7 +50,8 @@ field recordings
     -> recording-group folds and quality reports
     -> baseline and ResNet-18 training
     -> batch detection over whole recordings
-    -> future activity analysis
+    -> activity by hour of day and by date
+    -> future application for site staff
 ```
 
 ### 1. Raw recordings
@@ -93,6 +97,14 @@ The results go to one folder under `results/detections/`: a SQLite database that
 Every row names the source recording, the window, the recorder's clock time, and the exact model and preprocessing used.
 A file that cannot be read is recorded as failed instead of stopping the batch, and running the same command again continues where it stopped.
 
+### 8. Activity analysis
+
+`scripts/analyze_activity.py` turns one detection record into calling activity by hour of day and by date.
+It reports the share of recorded time in which the model detected a call, always beside how much was recorded, so an hour that was never recorded reads as "not recorded" instead of looking silent.
+The results go to one folder under `results/analytics/`: a report, a time-of-day chart, a 24-hour clock chart, a chart by date, and tables.
+`windows.csv` lists every window with its date, hour, and probability, so every number in the report can be checked by filtering it.
+All times use one fixed UTC offset, so daylight-saving changes cannot shift activity by an hour.
+
 ## Repository structure
 
 ```text
@@ -131,6 +143,7 @@ frog-bioacoustics/
     train_model.py             train, evaluate, and save the ResNet-18 detector
     verify_model.py            prove a saved run reproduces its predictions
     detect_calls.py            detect calls in every recording beneath a folder
+    analyze_activity.py        summarize calling activity in a detection record
 
   src/frog_classifier/         reusable Python package
     data/                      config, naming, manifests, folds, validation, and reports
@@ -138,6 +151,7 @@ frog-bioacoustics/
     labeling/                  queue order, decision log, moves, and playback audio
     training/                  model, training loop, metrics, saved runs, and verification
     inference/                 recordings, rendering, detection record, and CSV export
+    analytics/                 time basis, activity by hour and date, figures, and report
 
   tests/                       synthetic automated checks
   models/                      saved training runs

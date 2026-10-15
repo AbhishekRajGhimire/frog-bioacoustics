@@ -295,9 +295,10 @@ class OperationalDocumentationTests(unittest.TestCase):
         roadmap = roadmap_path.read_text(encoding="utf-8")
         for phase in range(1, 8):
             with self.subTest(phase=phase):
-                self.assertIn(f"## Phase {phase}:", roadmap)
-        self.assertIn("Status: Next", roadmap)
-        self.assertIn("Status: Planned", roadmap)
+                self.assertRegex(
+                    roadmap,
+                    rf"## Phase {phase}:[^\n]*\n\nStatus: (Complete|In progress|Next|Planned)\n",
+                )
 
     def test_workflow_documents_every_operational_command(self) -> None:
         workflow = (REPO_ROOT / "docs/workflow.md").read_text(encoding="utf-8")

@@ -3,7 +3,7 @@
 Frog Classifier turns long field recordings into fixed five-second Mel-spectrogram examples for careful human review and leakage-safe evaluation of *Litoria aurea* calls.
 Each image shows decibels above its own recording's noise floor, so faint calls stay visible and brightness means the same thing in every image.
 Phases 1, 2, 4, and 5 are complete: the first ResNet-18 detector is trained, saved, and verified on one site's recordings, and it runs over whole folders of recordings into a resumable, traceable detection record.
-Activity analysis and a user-facing application are next.
+Phase 6 is in progress: activity analysis by hour of day and by date is done, and an application for site staff is next.
 
 ## Start here
 
@@ -15,7 +15,7 @@ Activity analysis and a user-facing application are next.
 ## Pipeline
 
 ```text
-raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> ResNet-18 training and verification -> batch detection
+raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> ResNet-18 training and verification -> batch detection -> activity analysis
 ```
 
 `raw/` holds immutable source recordings.
@@ -24,6 +24,7 @@ raw recordings -> spectrogram queue -> human labels -> versioned manifest -> gro
 `results/data_quality/` receives generated validation reports.
 `models/` receives saved training runs.
 `results/detections/` receives detection records.
+`results/analytics/` receives activity analyses.
 The manifest workflow trains directly from labeled images, so materialized split directories are not part of the tracked layout.
 
 ## Setup
@@ -93,6 +94,12 @@ Detect calls in every recording beneath a folder with a saved run; running it ag
 
 ```powershell
 uv run python scripts/detect_calls.py models/<run folder> raw/external
+```
+
+Summarize calling activity in a detection record by hour of day and by date:
+
+```powershell
+uv run python scripts/analyze_activity.py results/detections/<record folder>
 ```
 
 ## Labeling policy

@@ -17,12 +17,12 @@ Verified on October 14, 2026:
 - Unique labeled recording groups in the manifest: 570
 - Saved models: 1 (`models/resnet18-20261014T114432Z`)
 - Detection records: 1 (`results/detections/external-resnet18-20261014T114432Z`, added October 15, 2026)
-- Analytics result artifacts: 0
+- Analytics result artifacts: 1 (`results/analytics/external-resnet18-20261014T114432Z`, added October 15, 2026)
 - Active Git branch: `main`
 
 Every spectrogram was regenerated under preprocessing schema version 2 with per-recording noise-floor rendering, and a 100-image sample re-rendered from raw audio byte for byte.
 Preprocessing accounts for every expected five-second example.
-The first ResNet-18 detector is trained, saved, and verified, and batch detection has scanned every recording.
+The first ResNet-18 detector is trained, saved, and verified, batch detection has scanned every recording, and the activity analysis summarizes that record by hour of day and by date.
 The project is now limited by label diversity: every label comes from one site, one season, and the hours between midnight and noon.
 
 ## Working principles
@@ -229,11 +229,11 @@ Verified on October 15, 2026 with run `models/resnet18-20261014T114432Z` over al
 - Detections fall from about a third of all windows between midnight and 03:00 to 6% at 11:00, matching the calling pattern in the labels.
 
 The roadmap planned CSV first and SQLite later, but resumable processing settled it now: one SQLite transaction per recording leaves only whole recordings after any interruption, and the CSV files are rewritten from the database at the end of every run.
-Times are the recorder's clock: the AudioMoth recorders kept UTC+11 after daylight saving ended on 3 April 2022, so Phase 6 must convert to local time with the site's time zone rules.
+Times are the recorder's clock: the AudioMoth recorders kept UTC+11 after daylight saving ended on 3 April 2022, so any conversion to local wall-clock time needs the site's time zone rules; Phase 6 avoids that by analyzing in one fixed UTC offset.
 
 ## Phase 6: Activity analytics and user-facing application
 
-Status: Next
+Status: In progress
 
 ### Purpose
 
@@ -256,6 +256,23 @@ Turn detection records into understandable activity patterns and an accessible r
 - Users can trace every chart value back to underlying detection records.
 - The application can process a sample recording and display its results without manual command-line work.
 - Interface tests cover core upload, processing, review, and export paths.
+
+### Progress
+
+Phase 6 is built in three parts, each designed, built, and verified on its own: activity analytics, the application for site staff, and packaging for people who never use a command line.
+
+The first part, activity analytics, was verified on October 15, 2026 on `results/detections/external-resnet18-20261014T114432Z`; the [design](docs/superpowers/specs/2026-10-15-activity-analytics-design.md) records every decision.
+
+- `scripts/analyze_activity.py` writes a report, a time-of-day chart, a 24-hour clock chart, a chart by date, and tables by hour, by date, and by window.
+- Recording effort and detected activity are separate numbers, and the calling share is detected windows divided by recorded windows; hours and dates without recordings read as not recorded, never as zero.
+- The analysis covers 618 recordings on 58 of the 76 dates from 20 January to 5 April 2022, with 00:00 to 11:59 recorded and 12:00 to 23:59 not recorded.
+- Calls were detected in 21.8% of recorded time at the model's threshold, from 34.2% between 01:00 and 02:00 to 6.3% between 11:00 and 12:00, and the threshold table shows the overall share moving only from 22.2% to 20.8% between thresholds of 0.5 and 0.99.
+- Every hour and date value was reproduced from `windows.csv`, and every hour value from a direct query of the detection database.
+- Every time is placed in one fixed UTC offset, by default the one the recorders state, because frogs do not follow daylight saving.
+- The analysis opens the detection record read-only and never changes it.
+
+One analysis covers one detection record, which the detection workflow already ties to one recorder deployment, so comparisons between sites wait until there are recordings from more than one site.
+The application in `classifier_app/` and its packaging are next.
 
 ## Phase 7: Operational quality and maintenance
 

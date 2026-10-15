@@ -18,6 +18,7 @@ flowchart LR
   M -->|"recompute every probability"| V["Verified predictions"]
   A -->|"render every window"| DET["Detection record<br/>results/detections/input-run"]
   M -->|"model, threshold, preprocessing copy"| DET
+  DET -->|"read-only: effort and calls by hour and date"| AN["Activity analysis<br/>results/analytics/record"]
 ```
 
 ## Storage contract
@@ -33,12 +34,14 @@ config/training.toml         versioned training contract
 results/data_quality/        generated manifest validation reports
 models/<run>/                saved training runs: weights, input copies, predictions, metrics, report
 results/detections/<input>-<run>/   detection records: detections.sqlite, detections.csv, recordings.csv
-results/analytics/           future activity analysis outputs
+results/analytics/<record>/  activity analyses: report.md, three figures, hour, date, and window tables
 src/frog_classifier/data/    manifest, splitting, validation, reporting, and configuration package
 src/frog_classifier/preprocessing/   Mel rendering, per-recording noise floor, PNG encoding, display colours
 src/frog_classifier/labeling/   session queue, decision log, moves, playback audio
 src/frog_classifier/training/   training configuration, model, training loop, metrics, saved runs, verification
 src/frog_classifier/inference/  batch detection: recordings, worker rendering, SQLite store, CSV export, detection runs
+src/frog_classifier/analytics/  activity analysis: time basis, effort and activity, figures, report, one analysis
+src/frog_classifier/files.py    write-then-swap replacement of generated files
 docs/decisions/              dated design decisions with their evidence
 ```
 
@@ -170,6 +173,34 @@ A recording and all of its windows are written in one transaction, so an interru
 Times are the recorder's clock.
 The start time is the file name's timestamp, and the UTC offset is the one the recorder states in its header.
 AudioMoth recorders keep the offset they were configured with, so the two recordings made after daylight saving ended on 3 April 2022 still state UTC+11; converting to local wall-clock time needs the site's time zone rules, not the stored offset alone.
+
+## Activity analysis
+
+`scripts/analyze_activity.py` delegates to `frog_classifier.analytics.analyze`, which reads one detection record and writes one analysis folder.
+The package imports no PyTorch, so an application can show analyses without loading the model.
+
+| Module | Responsibility |
+| --- | --- |
+| `timebase` | Parse and format UTC offsets, choose the analysis offset, and place a window in time |
+| `activity` | Read a record and count recorded windows, recordings, and detections by hour of day and by date, with the threshold table and coverage counts |
+| `figures` | The time-of-day, 24-hour clock, and by-date figures, drawn with matplotlib's object interface |
+| `report` | The Markdown report and the summary lines the command prints |
+| `analyze` | One analysis: read the record, aggregate, and write every output |
+
+Every window is placed in one fixed UTC offset: its recording's start time, converted with the recording's own stated offset, plus the window's start.
+The default offset is the one most recordings state, so times match the file names; a wall-clock time zone is never used, because daylight saving would shift activity by an hour at every change.
+A recording without a stated offset is taken to use the analysis offset, a recording without a start time is counted and left out of every time-based value, and the report states both counts.
+Each window belongs to the hour and date that contain its start, so a recording that crosses midnight contributes to both dates.
+
+The unit is the five-second window.
+Effort is the number of recorded windows, activity is the number at or above the threshold, and the calling share is their ratio.
+A bin without recorded windows has an empty share rather than zero, and the figures draw it as hatched "not recorded" space, so missing effort can never look like silence.
+The analysis threshold defaults to the record's model threshold, and the report repeats the totals at 0.5, 0.7, 0.9, 0.95, and 0.99.
+`windows.csv` lists every placed window with its date, hour, probability, and detection flag, and every value in the other tables and the figures is a count or ratio over its rows.
+
+`DetectionStore.open_read_only` opens the database with SQLite's read-only mode and takes the scan identity from the database itself.
+It refuses a missing file, a file that is not a detection database, and a database with a non-empty rollback journal, which means a detection run is writing it or was cut off.
+Every generated file, for both the analysis and the detection export, is written beside its target and swapped in by `frog_classifier.files.replace_file`, so a reader sees the old file or the new one, never half of one, and a file held open by another program is reported by name.
 
 ## Environment contract
 
