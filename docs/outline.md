@@ -17,7 +17,7 @@ Confident target calls become `litoria_aurea` examples, confident non-target sou
 
 The validated labels train and evaluate a ResNet-18 detector, which then scans whole folders of recordings and records how likely every five-second window is to hold a frog call.
 An analysis step turns those probabilities into calling activity by hour of day and by date, always beside how much was recorded.
-A future phase will put the whole workflow in an application for site staff.
+An application lets site staff scan their own recordings and see the results without a command line.
 
 ## Current status
 
@@ -35,7 +35,8 @@ It scanned all 618 recordings, 51.5 hours of audio, in one to two minutes, and i
 
 Phase 6 is in progress.
 Its first part, activity analysis, is done: one command turns a detection record into a report, three figures, and traceable tables.
-The application for site staff and its packaging come next, and labeling continues for other sites and seasons.
+Its second part, the application for site staff, is done: in a browser, staff choose a folder or memory card, scan it, and see when frogs called, with every number traceable to windows they can listen to.
+Packaging it for people who never use a command line comes next, and labeling continues for other sites and seasons.
 
 See the [roadmap](../roadmap.md) for the complete sequence of project phases.
 
@@ -51,7 +52,7 @@ field recordings
     -> baseline and ResNet-18 training
     -> batch detection over whole recordings
     -> activity by hour of day and by date
-    -> future application for site staff
+    -> application for site staff
 ```
 
 ### 1. Raw recordings
@@ -105,6 +106,13 @@ The results go to one folder under `results/analytics/`: a report, a time-of-day
 `windows.csv` lists every window with its date, hour, and probability, so every number in the report can be checked by filtering it.
 All times use one fixed UTC offset, so daylight-saving changes cannot shift activity by an hour.
 
+### 9. Application for site staff
+
+`uv run streamlit run classifier_app/app.py` opens the app in the browser.
+Under Scan recordings, a person chooses a folder or memory card, or uploads a few files, names the deployment, and presses Scan.
+The scan runs in the background with a progress bar, can be stopped, and continues where it stopped.
+Under Results, the person sees the summary, warnings such as recorders whose clock was not set, the three charts, and the threshold table, lists the windows behind any hour or date and listens to them, and downloads everything as one zip file.
+
 ## Repository structure
 
 ```text
@@ -152,11 +160,12 @@ frog-bioacoustics/
     training/                  model, training loop, metrics, saved runs, and verification
     inference/                 recordings, rendering, detection record, and CSV export
     analytics/                 time basis, activity by hour and date, figures, and report
+    app/                       app services: deployments, scans, uploads, listening, and download
 
   tests/                       synthetic automated checks
   models/                      saved training runs
   results/                     generated quality reports, detection records, and analytics
-  classifier_app/              future user-facing application
+  classifier_app/              the Streamlit app for site staff
 
   docs/
     outline.md                 this beginner orientation guide

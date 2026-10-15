@@ -267,13 +267,14 @@ It opens the detection record read-only and never changes it.
 | `clock.png` | The same shares on a 24-hour clock with midnight at the top |
 | `by_date.png` | The share of recorded time with calls for each date, above the hours recorded |
 | `activity_by_hour.csv`, `activity_by_date.csv` | Recorded windows and minutes, recordings, detected windows, and the calling share for each hour and date |
-| `windows.csv` | Every window with its recording, date, hour, probability, and whether it counts as a detection |
+| `windows.csv` | Every window with its recording, start second, date, time, hour, probability, and whether it counts as a detection |
 
 The calling share is detected windows divided by recorded windows.
 Hours and dates without recordings are marked as not recorded, never as zero calls, because nothing is known about them.
 Every value in the tables and figures can be reproduced by filtering `windows.csv`.
 
 Times use one fixed UTC offset for every recording, by default the one the recorders state, so daylight-saving changes cannot shift activity by an hour.
+A recording dated before 2005, or more than 14 hours after its detection record was created, almost always comes from a recorder whose clock was not set; it is left out of every time-based value and counted in a warning, like a recording with no time in its file name.
 Choose another fixed offset, or another threshold, like this:
 
 ```powershell
@@ -308,6 +309,12 @@ Results appear only once a deployment's scan has finished.
 
 Each deployment's record folder is `results/detections/<name>-<model run>/`.
 Beside the detection files it holds `deployment.json`, the name and source folder; `scan_status.json`, the scan's progress; and `scan.log`, the scan process's output.
+Listening reads the original recording, so the folder or memory card must be connected; the summary, charts, tables, and download need only the record.
+Set `FROG_CLASSIFIER_ROOT` to another folder holding `models/` to run the app on data kept outside the repository.
+
+The app scanned the 618 recordings of `raw/external` with the graphics card in about two and a half minutes, about five recordings a second.
+A scan stopped after 218 recordings kept exactly 218 whole recordings, and continuing it scanned the other 400.
+Its hour and date tables, from both the download and the command-line analysis, were identical to those of the earlier command-line scan, and the Results view showed the same summary, charts, and threshold table.
 
 ## Verify Phase 2 acceptance
 

@@ -3,7 +3,7 @@
 Frog Classifier turns long field recordings into fixed five-second Mel-spectrogram examples for careful human review and leakage-safe evaluation of *Litoria aurea* calls.
 Each image shows decibels above its own recording's noise floor, so faint calls stay visible and brightness means the same thing in every image.
 Phases 1, 2, 4, and 5 are complete: the first ResNet-18 detector is trained, saved, and verified on one site's recordings, and it runs over whole folders of recordings into a resumable, traceable detection record.
-Phase 6 is in progress: activity analysis by hour of day and by date is done, and an application for site staff is next.
+Phase 6 is in progress: activity analysis by hour of day and by date and an application for site staff are done, and packaging the application is next.
 
 ## Start here
 
@@ -15,7 +15,7 @@ Phase 6 is in progress: activity analysis by hour of day and by date is done, an
 ## Pipeline
 
 ```text
-raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> ResNet-18 training and verification -> batch detection -> activity analysis
+raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> ResNet-18 training and verification -> batch detection -> activity analysis -> application for site staff
 ```
 
 `raw/` holds immutable source recordings.
@@ -100,6 +100,12 @@ Summarize calling activity in a detection record by hour of day and by date:
 
 ```powershell
 uv run python scripts/analyze_activity.py results/detections/<record folder>
+```
+
+Scan recordings and explore the results in the browser, without the command line:
+
+```powershell
+uv run streamlit run classifier_app/app.py
 ```
 
 ## Labeling policy

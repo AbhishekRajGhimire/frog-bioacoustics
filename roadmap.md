@@ -272,7 +272,18 @@ The first part, activity analytics, was verified on October 15, 2026 on `results
 - The analysis opens the detection record read-only and never changes it.
 
 One analysis covers one detection record, which the detection workflow already ties to one recorder deployment, so comparisons between sites wait until there are recordings from more than one site.
-The application in `classifier_app/` and its packaging are next.
+
+The second part, the application for site staff, was verified on October 15, 2026; the [design](docs/superpowers/specs/2026-10-15-site-staff-app-design.md) records every decision.
+
+- `classifier_app/app.py` scans a folder, a memory card, or uploaded recordings as a named deployment, and shows the summary, coverage warnings, charts, threshold table, and the windows behind any hour or date with their audio and spectrogram.
+- Each scan runs in its own process with live progress, can be stopped, and continues where it stopped; results appear only once a scan has finished.
+- The model run, threshold, UTC offset, and coverage are shown with every result, and the threshold and offset can be changed.
+- Recordings dated before 2005 or after the scan, from recorders whose clock was not set, are left out of the time-based results with a warning.
+- The whole analysis and both detection spreadsheets download as one zip file.
+- On the 618 recordings of `raw/external`, a scan through the app, stopped after 218 recordings and continued, gave hour and date tables identical to the command-line scan, and the Results view matched the first part's analysis.
+- Interface tests cover choosing a folder, scanning to the end, stopping, the results, threshold changes, and listening; saving uploads and building the download are tested directly, because Streamlit's test harness cannot simulate an upload or a download.
+
+Packaging the application for people who never use a command line is next.
 
 ## Phase 7: Operational quality and maintenance
 

@@ -7,7 +7,7 @@ The [roadmap](../roadmap.md) records future capabilities and acceptance criteria
 
 ```mermaid
 flowchart LR
-  A["Raw recordings<br/>raw/external or raw/ponds"] -->|"slice and create Mel images"| B["Spectrogram queue<br/>processed/*/spectrograms"]
+  A["Raw recordings<br/>raw/external, raw/ponds, or raw/uploads"] -->|"slice and create Mel images"| B["Spectrogram queue<br/>processed/*/spectrograms"]
   B -->|"review image and audio"| C["Labeled images<br/>labeled/litoria_aurea or labeled/non_target"]
   B -->|"locate or export exact window"| G["Playback cache<br/>processed/*/chunks"]
   G --> C
@@ -19,12 +19,16 @@ flowchart LR
   A -->|"render every window"| DET["Detection record<br/>results/detections/input-run"]
   M -->|"model, threshold, preprocessing copy"| DET
   DET -->|"read-only: effort and calls by hour and date"| AN["Activity analysis<br/>results/analytics/record"]
+  APP["Site staff app<br/>classifier_app/app.py"] -->|"save uploaded recordings"| A
+  APP -->|"start, follow, and stop a scan process"| DET
+  DET -->|"read-only: summary, charts, windows, audio, zip"| APP
 ```
 
 ## Storage contract
 
 ```text
 raw/                         immutable source recordings
+raw/uploads/<name>/          recordings uploaded through the app, never overwritten
 processed/                   reproducible spectrograms and playback chunks
 labeled/                     human-selected PNGs and generated manifest.csv
 labeled/unsure/              clips the reviewer could not decide on, excluded from training
@@ -34,6 +38,7 @@ config/training.toml         versioned training contract
 results/data_quality/        generated manifest validation reports
 models/<run>/                saved training runs: weights, input copies, predictions, metrics, report
 results/detections/<input>-<run>/   detection records: detections.sqlite, detections.csv, recordings.csv
+results/detections/<name>-<run>/    app deployments: the same files plus deployment.json, scan_status.json, scan.log
 results/analytics/<record>/  activity analyses: report.md, three figures, hour, date, and window tables
 src/frog_classifier/data/    manifest, splitting, validation, reporting, and configuration package
 src/frog_classifier/preprocessing/   Mel rendering, per-recording noise floor, PNG encoding, display colours
@@ -41,6 +46,8 @@ src/frog_classifier/labeling/   session queue, decision log, moves, playback aud
 src/frog_classifier/training/   training configuration, model, training loop, metrics, saved runs, verification
 src/frog_classifier/inference/  batch detection: recordings, worker rendering, SQLite store, CSV export, detection runs
 src/frog_classifier/analytics/  activity analysis: time basis, effort and activity, figures, report, one analysis
+src/frog_classifier/app/     app services: data root, model choice, deployments, scan process and status, uploads, listening, download
+classifier_app/app.py        the Streamlit app for site staff
 src/frog_classifier/files.py    write-then-swap replacement of generated files
 docs/decisions/              dated design decisions with their evidence
 ```
@@ -183,13 +190,14 @@ The package imports no PyTorch, so an application can show analyses without load
 | --- | --- |
 | `timebase` | Parse and format UTC offsets, choose the analysis offset, and place a window in time |
 | `activity` | Read a record and count recorded windows, recordings, and detections by hour of day and by date, with the threshold table and coverage counts |
-| `figures` | The time-of-day, 24-hour clock, and by-date figures, drawn with matplotlib's object interface |
-| `report` | The Markdown report and the summary lines the command prints |
+| `figures` | The time-of-day, 24-hour clock, and by-date figures, drawn with matplotlib's object interface into a file or into memory |
+| `report` | The Markdown report, the headline lines, and the coverage warnings the command prints and the app shows |
 | `analyze` | One analysis: read the record, aggregate, and write every output |
 
 Every window is placed in one fixed UTC offset: its recording's start time, converted with the recording's own stated offset, plus the window's start.
 The default offset is the one most recordings state, so times match the file names; a wall-clock time zone is never used, because daylight saving would shift activity by an hour at every change.
 A recording without a stated offset is taken to use the analysis offset, a recording without a start time is counted and left out of every time-based value, and the report states both counts.
+A start time before 2005, or more than 14 hours after the record was created, is impossible, usually because the recorder's clock was never set; such a recording is counted and left out of every time-based value in the same way, so one recording dated 1970 cannot stretch the dates over fifty years.
 Each window belongs to the hour and date that contain its start, so a recording that crosses midnight contributes to both dates.
 
 The unit is the five-second window.
@@ -201,6 +209,41 @@ The analysis threshold defaults to the record's model threshold, and the report 
 `DetectionStore.open_read_only` opens the database with SQLite's read-only mode and takes the scan identity from the database itself.
 It refuses a missing file, a file that is not a detection database, and a database with a non-empty rollback journal, which means a detection run is writing it or was cut off.
 Every generated file, for both the analysis and the detection export, is written beside its target and swapped in by `frog_classifier.files.replace_file`, so a reader sees the old file or the new one, never half of one, and a file held open by another program is reported by name.
+
+## Site staff app
+
+`classifier_app/app.py` is a Streamlit page for people who scan recordings and read the results without a command line.
+It holds only the page: every action goes through `frog_classifier.app`, whose modules never import PyTorch, so the page starts quickly and stays responsive while a scan runs.
+
+| Module | Responsibility |
+| --- | --- |
+| `paths` | The data root, `FROG_CLASSIFIER_ROOT` when it is set and otherwise the repository, and the models, uploads, and detections folders beneath it |
+| `models` | The newest saved run, chosen by the training time in its name and read from `run.json` without loading the model |
+| `deployments` | Deployment names and record folders, `deployment.json`, the list of deployments with their scan status, the folder preview, and starting a scan |
+| `scans` | The status file, the stop request, and launching the scan process |
+| `scan_job` | The scan process: one detection run that reports its progress and honours a stop request |
+| `uploads` | Save uploaded recordings into `raw/uploads/<name>/` without overwriting any |
+| `listening` | One window's audio, normalized to full loudness, and the spectrogram the model saw, rendered with the run's own preprocessing copy |
+| `export` | The download: the analysis at the chosen threshold and offset, with the detection spreadsheets, as one zip file |
+| `dialog` | The system folder dialog behind the Browse button |
+
+A deployment is one named set of recordings scanned with one model.
+Its record folder is `results/detections/<name>-<model run>/`, with the name reduced to characters every file system accepts, and `deployment.json` holds the name, the absolute input folder, the model run, and the creation time.
+A name already used for a different folder is refused, so one record never mixes recorders, and a record made by `scripts/detect_calls.py` appears under the name of the folder it scanned.
+
+Each scan runs in its own process, `python -m frog_classifier.app.scan_job`, which calls the same `detect_calls` as the command and writes its output to `scan.log`.
+Only one scan runs at a time, because scans share one graphics card.
+The scan process keeps `scan_status.json` current: its state (starting, running, finished, stopped, or failed), the recordings found, already done, processed, and failed, the device, and a message.
+It rewrites the file at least every two seconds, and the app reads it once a second while a scan runs; an active state older than 30 seconds reads as interrupted, which is what a closed app or a crashed process leaves behind.
+`results_ready` turns false when a scan finds recordings still to do and true only when one finishes, and Results shows a deployment only when it is ready and not being scanned, so a partial record is never presented as a result.
+
+Stop scan creates `stop_requested` in the record folder.
+The scan process checks it after each stored recording, and its heartbeat thread also interrupts the process, so a stop takes effect within seconds.
+Because each recording is stored in one transaction, a stop leaves only whole recordings, and Continue scan runs the same scan again and skips them.
+
+Results reads the database read-only and caches each analysis by the database's modification time, threshold, and offset.
+Listening reads the recording from its original folder, so the folder or memory card must be connected to listen, while the summary, charts, and tables need only the record.
+An uploaded file whose name already holds different recordings is refused rather than replaced, and an identical one is skipped.
 
 ## Environment contract
 
