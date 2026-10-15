@@ -17,7 +17,7 @@ Confident target calls become `litoria_aurea` examples, confident non-target sou
 
 The validated labels train and evaluate a ResNet-18 detector, which then scans whole folders of recordings and records how likely every five-second window is to hold a frog call.
 An analysis step turns those probabilities into calling activity by hour of day and by date, always beside how much was recorded.
-An application lets site staff scan their own recordings and see the results without a command line.
+An application lets site staff scan their own recordings and see the results without a command line, and a package lets them run it on a Windows computer with nothing installed.
 
 ## Current status
 
@@ -33,10 +33,11 @@ Every label comes from one site between January and March, recorded between midn
 Phase 5 made the detector usable on whole folders of recordings.
 It scanned all 618 recordings, 51.5 hours of audio, in one to two minutes, and it can be stopped and restarted without losing or repeating work.
 
-Phase 6 is in progress.
-Its first part, activity analysis, is done: one command turns a detection record into a report, three figures, and traceable tables.
-Its second part, the application for site staff, is done: in a browser, staff choose a folder or memory card, scan it, and see when frogs called, with every number traceable to windows they can listen to.
-Packaging it for people who never use a command line comes next, and labeling continues for other sites and seasons.
+Phase 6 is complete, in three parts.
+Activity analysis turns a detection record into a report, three figures, and traceable tables with one command.
+The application for site staff does the same in a browser: staff choose a folder or memory card, scan it, and see when frogs called, with every number traceable to windows they can listen to.
+The package puts the application, its own Python, and the model in one zip file that staff unzip and start with a double-click.
+Labeling continues for other sites and seasons, and Phase 7, operational quality, comes next.
 
 See the [roadmap](../roadmap.md) for the complete sequence of project phases.
 
@@ -113,6 +114,10 @@ Under Scan recordings, a person chooses a folder or memory card, or uploads a fe
 The scan runs in the background with a progress bar, can be stopped, and continues where it stopped.
 Under Results, the person sees the summary, warnings such as recorders whose clock was not set, the three charts, and the threshold table, lists the windows behind any hour or date and listens to them, and downloads everything as one zip file.
 
+Site staff do not need the repository.
+`uv run python scripts/build_package.py` builds `dist/FrogCallScanner-<version>-<commit>.zip`, which holds the app, its own Python, every dependency, and the newest saved model, and checks it before keeping it.
+Staff unzip it and double-click `Start Frog Call Scanner`; their results go to `%LOCALAPPDATA%\Frog Call Scanner`, so a newer package replaces the old one without losing them.
+
 ## Repository structure
 
 ```text
@@ -152,6 +157,7 @@ frog-bioacoustics/
     verify_model.py            prove a saved run reproduces its predictions
     detect_calls.py            detect calls in every recording beneath a folder
     analyze_activity.py        summarize calling activity in a detection record
+    build_package.py           build the zip that site staff unzip and start
 
   src/frog_classifier/         reusable Python package
     data/                      config, naming, manifests, folds, validation, and reports
@@ -160,12 +166,14 @@ frog-bioacoustics/
     training/                  model, training loop, metrics, saved runs, and verification
     inference/                 recordings, rendering, detection record, and CSV export
     analytics/                 time basis, activity by hour and date, figures, and report
-    app/                       app services: deployments, scans, uploads, listening, and download
+    app/                       app services: deployments, scans, uploads, listening, download, and launcher
+    packaging/                 site staff package: contents, build, and self-check
 
   tests/                       synthetic automated checks
   models/                      saved training runs
   results/                     generated quality reports, detection records, and analytics
   classifier_app/              the Streamlit app for site staff
+  dist/                        the built site staff package and its zip
 
   docs/
     outline.md                 this beginner orientation guide
@@ -192,6 +200,7 @@ Git normally ignores:
 - Generated manifests and quality reports.
 - Trained model artifacts.
 - Detection records and analytics outputs.
+- Site staff packages under `dist/`.
 - Local Python environments such as `.venv`.
 
 Ignored does not mean unimportant.
@@ -296,6 +305,7 @@ Use this guide when deciding which file to edit:
 | Audio and spectrogram defaults | `config/preprocessing.toml` |
 | Spectrogram rendering behavior | `src/frog_classifier/preprocessing/` |
 | Labeling queue, decisions, or playback audio | `src/frog_classifier/labeling/` |
+| Site staff package or its launcher | `src/frog_classifier/packaging/` or `src/frog_classifier/app/launch.py` |
 | Automated verification | `tests/` |
 | Beginner entry points | `README.md` or `docs/outline.md` |
 | Detailed operating instructions | `docs/workflow.md` |

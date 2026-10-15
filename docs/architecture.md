@@ -22,6 +22,8 @@ flowchart LR
   APP["Site staff app<br/>classifier_app/app.py"] -->|"save uploaded recordings"| A
   APP -->|"start, follow, and stop a scan process"| DET
   DET -->|"read-only: summary, charts, windows, audio, zip"| APP
+  APP -->|"app, locked dependencies, standalone Python"| PKG["Site staff package<br/>dist/Frog Call Scanner"]
+  M -->|"one saved run"| PKG
 ```
 
 ## Storage contract
@@ -40,13 +42,16 @@ models/<run>/                saved training runs: weights, input copies, predict
 results/detections/<input>-<run>/   detection records: detections.sqlite, detections.csv, recordings.csv
 results/detections/<name>-<run>/    app deployments: the same files plus deployment.json, scan_status.json, scan.log
 results/analytics/<record>/  activity analyses: report.md, three figures, hour, date, and window tables
+dist/Frog Call Scanner/      the site staff package, and beside it FrogCallScanner-<version>-<commit>.zip
+%LOCALAPPDATA%\Frog Call Scanner\   the package's data root on a staff computer: results/detections and raw/uploads
 src/frog_classifier/data/    manifest, splitting, validation, reporting, and configuration package
 src/frog_classifier/preprocessing/   Mel rendering, per-recording noise floor, PNG encoding, display colours
 src/frog_classifier/labeling/   session queue, decision log, moves, playback audio
 src/frog_classifier/training/   training configuration, model, training loop, metrics, saved runs, verification
 src/frog_classifier/inference/  batch detection: recordings, worker rendering, SQLite store, CSV export, detection runs
 src/frog_classifier/analytics/  activity analysis: time basis, effort and activity, figures, report, one analysis
-src/frog_classifier/app/     app services: data root, model choice, deployments, scan process and status, uploads, listening, download
+src/frog_classifier/app/     app services: data root, model choice, deployments, scan process and status, uploads, listening, download, launcher
+src/frog_classifier/packaging/   site staff package: contents, build, and self-check
 classifier_app/app.py        the Streamlit app for site staff
 src/frog_classifier/files.py    write-then-swap replacement of generated files
 docs/decisions/              dated design decisions with their evidence
@@ -217,7 +222,7 @@ It holds only the page: every action goes through `frog_classifier.app`, whose m
 
 | Module | Responsibility |
 | --- | --- |
-| `paths` | The data root, `FROG_CLASSIFIER_ROOT` when it is set and otherwise the repository, and the models, uploads, and detections folders beneath it |
+| `paths` | The data root, `FROG_CLASSIFIER_ROOT` when it is set and otherwise the repository, the uploads and detections folders beneath it, and the models folder, `FROG_CLASSIFIER_MODELS` when it is set and otherwise `models/` beneath the root |
 | `models` | The newest saved run, chosen by the training time in its name and read from `run.json` without loading the model |
 | `deployments` | Deployment names and record folders, `deployment.json`, the list of deployments with their scan status, the folder preview, and starting a scan |
 | `scans` | The status file, the stop request, and launching the scan process |
@@ -226,6 +231,7 @@ It holds only the page: every action goes through `frog_classifier.app`, whose m
 | `listening` | One window's audio, normalized to full loudness, and the spectrogram the model saw, rendered with the run's own preprocessing copy |
 | `export` | The download: the analysis at the chosen threshold and offset, with the detection spreadsheets, as one zip file |
 | `dialog` | The system folder dialog behind the Browse button |
+| `launch` | The site staff package's launcher: the runtime check, the port, the child environment, the Streamlit start, and the browser |
 
 A deployment is one named set of recordings scanned with one model.
 Its record folder is `results/detections/<name>-<model run>/`, with the name reduced to characters every file system accepts, and `deployment.json` holds the name, the absolute input folder, the model run, and the creation time.
@@ -245,9 +251,41 @@ Results reads the database read-only and caches each analysis by the database's 
 Listening reads the recording from its original folder, so the folder or memory card must be connected to listen, while the summary, charts, and tables need only the record.
 An uploaded file whose name already holds different recordings is refused rather than replaced, and an identical one is skipped.
 
+## Site staff package
+
+`scripts/build_package.py` delegates to `frog_classifier.packaging.build`, which turns a committed tree and one saved run into a portable Windows folder and its zip; the [design](superpowers/specs/2026-10-15-site-staff-package-design.md) records every decision.
+
+| Module | Responsibility |
+| --- | --- |
+| `contents` | The package's names and layout, `build.json`, the launcher and instruction text, pruning, and the path budget |
+| `build` | One build: check the tree, install Python and the locked dependencies, prune, compile, copy the app and model, self-check, and zip |
+| `selfcheck` | The checks the package's own Python runs before the build keeps it |
+
+The build installs CPython 3.13.14 with `uv python install --no-bin --no-registry`, so the build computer's own tools folder and registry never change.
+It then runs `uv sync --frozen --no-default-groups --group model-cpu --no-editable` with `UV_PROJECT_ENVIRONMENT` set to that Python, so every version and hash comes from `uv.lock`.
+It removes Python's `include`, `libs`, and `Scripts` folders, PyTorch's `include` and `share` folders, and every `.lib` file, which only compiling needs, and compiles every module with unchecked-hash bytecode, so the timestamps an unzip tool sets never make Python recompile.
+The whole run folder is copied, because loading a run checks every file `run.json` records.
+A package is built in a hidden folder under the output folder and replaces `Frog Call Scanner/` and the zip only after every check passes.
+It refuses uncommitted changes in `src/`, `classifier_app/`, `pyproject.toml`, and `uv.lock` unless told otherwise, and `build.json` records the version, commit, whether it was uncommitted, the build time, Python, PyTorch, and model run.
+
+Every path inside the package may be at most 160 characters, which leaves 100 for the extraction folder below Windows' 260-character limit, and the build names the paths over that budget.
+
+`frog_classifier.packaging.selfcheck` runs with the package's own Python, `-I`, and an environment holding only the Windows essentials, so nothing on the build computer can help it pass.
+It checks that every import path is inside the package, the app modules import without PyTorch, PyTorch is a CPU build, the packaged model loads with matching checksums, `detect_calls` scans a synthetic ten-second recording with two worker processes into two windows, the app page renders its model caption, and the launcher's Streamlit start serves the page.
+
+`Start Frog Call Scanner.bat` runs `app\python\python.exe -I -m frog_classifier.app.launch` with the app file, model folder, and `%LOCALAPPDATA%\Frog Call Scanner` as arguments, every package path built from the batch file's own location.
+It says to extract the whole download when the packaged Python is missing, which is what starting it from inside the zip looks like, and pauses only when the launcher reports a problem.
+`frog_classifier.app.launch` creates the data folder, checks that `msvcp140.dll` loads and otherwise names Microsoft's Visual C++ Redistributable, and uses port 8571, opening the app already answering there instead of starting another, or a free port when another program holds it.
+It starts Streamlit for this computer only, headless, with the minimal toolbar and no file watcher, in an environment without `PYTHON` variables and with `PYTHONNOUSERSITE=1`, `FROG_CLASSIFIER_ROOT` set to the data folder, and `FROG_CLASSIFIER_MODELS` set to the packaged model folder.
+It opens the browser once the app's health address answers, without any proxy, and waits; Streamlit and every scan share the launcher's console window, so closing it ends them all, and the app later shows the scan as interrupted and continues it on request.
+
+Results stay outside the package, so replacing the package keeps them, and the model stays inside it, so a newer package brings its newer model and an older one never picks it up.
+The package's tests live in `tests/site_staff_package/`, because test discovery puts `tests/` first on the import path, and a folder named `packaging` there would hide the `packaging` library that librosa needs.
+
 ## Environment contract
 
 Python 3.13 is supported.
 `pyproject.toml` declares direct runtime dependencies, `uv.lock` records the resolved environment, and `requirements_labeler.txt` is the generated pip-compatible export used by the Windows launcher.
 PyTorch and torchvision form the default `model` dependency group, resolved from the explicit PyTorch CUDA 13.0 index on Windows and Linux; the labeler export leaves the group out.
+The `model-cpu` group holds the same versions from the explicit PyTorch CPU index for the site staff package, and it is declared as conflicting with `model`, so each environment holds one build of PyTorch.
 Create the environment with `uv sync --frozen`.

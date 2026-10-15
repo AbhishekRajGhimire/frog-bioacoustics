@@ -14,6 +14,7 @@ uv sync --frozen
 
 The sync also installs the default `model` dependency group, which holds PyTorch and torchvision.
 On Windows and Linux they come from the PyTorch CUDA 13.0 package index, so an NVIDIA GPU with a recent driver is used when present and the CPU otherwise.
+The `model-cpu` group holds the same versions from the PyTorch CPU index for the site staff package; it conflicts with `model`, so the two are never installed together.
 
 To open the graphical labeler on Windows without using uv directly, double-click `Launch_Labeler.bat`.
 The launcher creates `.venv`, installs the generated locked compatibility export, and opens the Streamlit interface.
@@ -313,10 +314,59 @@ Each deployment's record folder is `results/detections/<name>-<model run>/`.
 Beside the detection files it holds `deployment.json`, the name and source folder; `scan_status.json`, the scan's progress; and `scan.log`, the scan process's output.
 Listening reads the original recording, so the folder or memory card must be connected; the summary, charts, tables, and download need only the record.
 Set `FROG_CLASSIFIER_ROOT` to another folder holding `models/` to run the app on data kept outside the repository.
+Set `FROG_CLASSIFIER_MODELS` as well to take the models from a different folder than `<root>/models`, which is what the site staff package does.
 
 The app scanned the 618 recordings of `raw/external` with the graphics card in about two and a half minutes, about five recordings a second.
 A scan stopped after 218 recordings kept exactly 218 whole recordings, and continuing it scanned the other 400.
 Its hour and date tables, from both the download and the command-line analysis, were identical to those of the earlier command-line scan, and the Results view showed the same summary, charts, and threshold table.
+
+## Build the package for site staff
+
+The package lets a person use the app on a Windows computer with nothing installed: they unzip one file and double-click a launcher.
+Build it from the repository folder:
+
+```powershell
+uv run python scripts/build_package.py
+```
+
+The command packages the newest saved run under `models/`, or the one `--model models/<run folder>` names.
+It refuses to build while `src/`, `classifier_app/`, `pyproject.toml`, or `uv.lock` has uncommitted changes, so every package maps to one commit.
+`--allow-uncommitted` builds anyway for a test, and the zip's name and `build.json` then say so.
+The first build needs the internet to download Python 3.13.14 and the locked packages, including the processor build of PyTorch; uv keeps them in its cache for later builds.
+
+The build installs that standalone Python and every locked dependency, from the `model-cpu` group, into a new folder.
+It removes files that only compiling needs, compiles every module, copies the app and the whole saved run, and writes the launcher, plain instructions, and `build.json`.
+It then checks the package with the package's own Python, in an environment without this computer's Python, uv, or repository: the import path stays inside the package, the app modules load without PyTorch, PyTorch is the processor build, the model loads and its checksums match, a synthetic recording is scanned with worker processes, the app page renders, and the launcher's Streamlit start serves it.
+The build also fails when any path inside the package is longer than 160 characters, which leaves 100 for wherever the zip is extracted before Windows' 260-character limit.
+Only when everything passes does it replace `dist/Frog Call Scanner/` and write `dist/FrogCallScanner-<version>-<commit>.zip`; `--output` names a folder other than `dist/`.
+A failed build leaves the previous package as it was.
+
+```text
+Frog Call Scanner/
+  Start Frog Call Scanner.bat   double-click to start
+  How to use.txt                plain instructions, with the version and build
+  build.json                    version, commit, build time, Python, PyTorch, and model run
+  app/
+    python/                     the standalone Python with every dependency and frog_classifier
+    classifier_app/app.py       the app
+    models/<run>/               the saved run
+```
+
+Share the zip file.
+Staff right-click it, choose Extract All, and double-click `Start Frog Call Scanner`; `How to use.txt` takes them through it, including the warning Windows shows because the package is not signed.
+The launcher opens the app in the browser at `http://localhost:8571`, or opens the running app when it is started a second time.
+Closing its black window stops the app and any scan, and the scan continues later from Continue scan.
+If the computer lacks Microsoft's C++ runtime, which PyTorch needs, the window says to install the Visual C++ Redistributable (x64) from `https://aka.ms/vs/17/release/vc_redist.x64.exe`.
+
+The package scans on the processor even where there is a graphics card, because the processor build of PyTorch installs in 540 MB rather than 2.9 GB, and the processor is fast enough.
+Results and uploads go to `%LOCALAPPDATA%\Frog Call Scanner`, never into the package, and the About page shows that folder.
+To update, staff delete the package folder and unzip the new version; their results stay, and records made with an older model still show their results.
+
+The build of commit `25fd224` with `models/resnet18-20261014T114432Z` took 144 seconds, after earlier trials had filled uv's cache.
+The zip is 475 MB and unzips to 31,965 files and 1.38 GB, with a longest path inside the package of 154 characters; Windows' Extract All took about three minutes.
+Started with only the Windows folders on its path and a separate data folder, the package scanned the 83 recordings of `raw/external/IWS076-20260205T052512Z-1-001` in 69 seconds, with exactly the windows, probabilities, and 214 detections of `scripts/detect_calls.py --device cpu`.
+Closing its window during a scan of all 618 recordings of `raw/external` stopped every process; after a restart the deployment read as ended unexpectedly, and Continue scan finished the other 557.
+The finished record matched the graphics-card scan of Phase 5 to within 0.00002 in every probability, with the same 8,080 detections, and nothing was written into the package except numba's caches for librosa.
 
 ## Verify Phase 2 acceptance
 

@@ -353,6 +353,7 @@ class OperationalDocumentationTests(unittest.TestCase):
             "uv run python scripts/detect_calls.py",
             "uv run python scripts/analyze_activity.py",
             "uv run streamlit run classifier_app/app.py",
+            "uv run python scripts/build_package.py",
         ):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)

@@ -18,11 +18,13 @@ Verified on October 14, 2026:
 - Saved models: 1 (`models/resnet18-20261014T114432Z`)
 - Detection records: 1 (`results/detections/external-resnet18-20261014T114432Z`, added October 15, 2026)
 - Analytics result artifacts: 1 (`results/analytics/external-resnet18-20261014T114432Z`, added October 15, 2026)
+- Site staff packages: 1 (`dist/FrogCallScanner-0.1.0-25fd224.zip`, built October 15, 2026)
 - Active Git branch: `main`
 
 Every spectrogram was regenerated under preprocessing schema version 2 with per-recording noise-floor rendering, and a 100-image sample re-rendered from raw audio byte for byte.
 Preprocessing accounts for every expected five-second example.
 The first ResNet-18 detector is trained, saved, and verified, batch detection has scanned every recording, and the activity analysis summarizes that record by hour of day and by date.
+Site staff can do the same through an application, packaged as one zip file for Windows computers with nothing installed.
 The project is now limited by label diversity: every label comes from one site, one season, and the hours between midnight and noon.
 
 ## Working principles
@@ -233,7 +235,7 @@ Times are the recorder's clock: the AudioMoth recorders kept UTC+11 after daylig
 
 ## Phase 6: Activity analytics and user-facing application
 
-Status: In progress
+Status: Complete
 
 ### Purpose
 
@@ -283,11 +285,22 @@ The second part, the application for site staff, was verified on October 15, 202
 - On the 618 recordings of `raw/external`, a scan through the app, stopped after 218 recordings and continued, gave hour and date tables identical to the command-line scan, and the Results view matched the first part's analysis.
 - Interface tests cover choosing a folder, scanning to the end, stopping, the results, threshold changes, and listening; saving uploads and building the download are tested directly, because Streamlit's test harness cannot simulate an upload or a download.
 
-Packaging the application for people who never use a command line is next.
+The third part, the site staff package, was verified on October 15, 2026; the [design](docs/superpowers/specs/2026-10-15-site-staff-package-design.md) records every decision.
+
+- `scripts/build_package.py` builds one zip file from a committed tree: the app, a standalone Python 3.13.14, every locked dependency with PyTorch for the processor, and the newest saved model.
+- The build keeps a package only when the package's own Python, cut off from the build computer's Python and uv, passes its self-check, and every path inside it fits a 160-character budget.
+- Staff unzip it and double-click `Start Frog Call Scanner`; the browser opens at the app, a second start opens the running app, and closing the window stops the app and any scan.
+- Results and uploads go to `%LOCALAPPDATA%\Frog Call Scanner`, so replacing the package with a newer one keeps them.
+- The build of commit `25fd224` took 144 seconds and gave a 475 MB zip that unzips to 31,965 files and 1.38 GB, with a longest inside path of 154 characters.
+- Unzipped with Windows' Extract All and started with no Python or uv on its path, the package scanned 83 recordings in 69 seconds on the processor with exactly the detections of the command-line scan, and its results, charts, listening, and download worked.
+- Closing the window during a scan of all 618 recordings stopped every process; after a restart, Continue scan finished the other 557, and the record matched the Phase 5 graphics-card scan to within 0.00002 in every probability, with the same 8,080 detections.
+
+The package is not signed, so Windows warns about it until a person chooses Run anyway, and a computer without Microsoft's Visual C++ runtime must install it first, as the launcher explains.
+It was tested on the development laptop, where long paths are enabled, so the 260-character limit is guarded by the path budget rather than by a test on a computer with that limit.
 
 ## Phase 7: Operational quality and maintenance
 
-Status: Planned
+Status: Next
 
 ### Purpose
 
