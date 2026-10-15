@@ -84,7 +84,8 @@ ANALYTICS_PACKAGE_MODULES = tuple(
 APP_PACKAGE_MODULES = tuple(
     f"src/frog_classifier/app/{name}.py"
     for name in (
-        "__init__", "deployments", "dialog", "export", "listening", "models", "paths", "scan_job", "scans", "uploads",
+        "__init__", "deployments", "dialog", "export", "launch", "listening", "models", "paths", "scan_job", "scans",
+        "uploads",
     )
 )
 

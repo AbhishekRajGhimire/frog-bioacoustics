@@ -38,7 +38,9 @@ class AppPathsTests(unittest.TestCase):
             self.assertEqual(app_paths(Path("repo")).root, Path("repo"))
 
     def test_the_app_modules_do_not_load_pytorch(self) -> None:
-        modules = ("deployments", "dialog", "export", "listening", "models", "paths", "scan_job", "scans", "uploads")
+        modules = (
+            "deployments", "dialog", "export", "launch", "listening", "models", "paths", "scan_job", "scans", "uploads",
+        )
         imports = ", ".join(f"frog_classifier.app.{name}" for name in modules)
         result = subprocess.run(
             [sys.executable, "-c", f"import sys, {imports}; print('torch' in sys.modules)"],
