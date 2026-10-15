@@ -249,6 +249,42 @@ Every worker count stored exactly the same probabilities, and for all 4,224 labe
 Each worker process uses about 250 MB of memory for five-minute recordings; longer recordings need proportionally more, so lower `--workers` if memory runs short.
 If the command is killed outright, its workers exit on their own, and the next run continues from the last complete recording.
 
+## Analyze calling activity
+
+`scripts/analyze_activity.py` turns one detection record into calling activity by hour of day and by date.
+
+```powershell
+uv run python scripts/analyze_activity.py results/detections/<record folder>
+```
+
+The analysis goes to `results/analytics/<record folder>/` unless `--output` names another folder, and running it again replaces those files.
+It opens the detection record read-only and never changes it.
+
+| File | Contents |
+| --- | --- |
+| `report.md` | Coverage, the peak hour, tables by hour and by date, the threshold table, the figures, and provenance |
+| `time_of_day.png` | The share of recorded time with calls for each hour of day, above the hours recorded |
+| `clock.png` | The same shares on a 24-hour clock with midnight at the top |
+| `by_date.png` | The share of recorded time with calls for each date, above the hours recorded |
+| `activity_by_hour.csv`, `activity_by_date.csv` | Recorded windows and minutes, recordings, detected windows, and the calling share for each hour and date |
+| `windows.csv` | Every window with its recording, date, hour, probability, and whether it counts as a detection |
+
+The calling share is detected windows divided by recorded windows.
+Hours and dates without recordings are marked as not recorded, never as zero calls, because nothing is known about them.
+Every value in the tables and figures can be reproduced by filtering `windows.csv`.
+
+Times use one fixed UTC offset for every recording, by default the one the recorders state, so daylight-saving changes cannot shift activity by an hour.
+Choose another fixed offset, or another threshold, like this:
+
+```powershell
+uv run python scripts/analyze_activity.py results/detections/<record folder> --utc-offset +10:00 --threshold 0.9 --output results/analytics/<name>
+```
+
+Write a negative offset with an equals sign, such as `--utc-offset=-03:00`.
+The report repeats the totals at thresholds from 0.5 to 0.99 so it is clear how much the result depends on the threshold.
+If a detection run is still writing the record, or was interrupted, the command refuses to read it until the same detection command has been run again.
+A report or table open in another program cannot be replaced; close it and run the command again.
+
 ## Verify Phase 2 acceptance
 
 Run the real-data manifest twice and compare all three generated artifacts:

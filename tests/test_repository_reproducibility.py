@@ -76,6 +76,11 @@ INFERENCE_PACKAGE_MODULES = tuple(
     for name in ("__init__", "detect", "export", "recordings", "rendering", "store")
 )
 
+ANALYTICS_PACKAGE_MODULES = tuple(
+    f"src/frog_classifier/analytics/{name}.py"
+    for name in ("__init__", "activity", "analyze", "figures", "report", "timebase")
+)
+
 OPERATIONAL_DOCUMENTS = (
     "README.md",
     "roadmap.md",
@@ -129,6 +134,7 @@ OPERATIONAL_TEXT_FILES = (
     "docs/outline.md",
     "docs/architecture.md",
     "docs/workflow.md",
+    "scripts/analyze_activity.py",
     "scripts/build_manifest.py",
     "scripts/detect_calls.py",
     "scripts/slice_audio.py",
@@ -180,6 +186,8 @@ class RepositoryLayoutTests(unittest.TestCase):
             *LABELING_PACKAGE_MODULES,
             *TRAINING_PACKAGE_MODULES,
             *INFERENCE_PACKAGE_MODULES,
+            "src/frog_classifier/files.py",
+            *ANALYTICS_PACKAGE_MODULES,
         ):
             with self.subTest(required=relative_path):
                 self.assertTrue((REPO_ROOT / relative_path).is_file())
@@ -302,6 +310,7 @@ class OperationalDocumentationTests(unittest.TestCase):
             "uv run python scripts/train_model.py",
             "uv run python scripts/verify_model.py",
             "uv run python scripts/detect_calls.py",
+            "uv run python scripts/analyze_activity.py",
         ):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)
