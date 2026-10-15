@@ -96,7 +96,8 @@ Records made with an older model stay listed; their results still show, and list
 
 ### Launcher
 
-`Start Frog Call Scanner.bat` changes to its own folder and runs `app\python\python.exe -I -m frog_classifier.app.launch` with the app file, the model folder, and the data folder as arguments.
+`Start Frog Call Scanner.bat` runs `app\python\python.exe -I -m frog_classifier.app.launch` with the app file, the model folder, and the data folder as arguments, every path built from the batch file's own location, so it works from any folder, including a network one.
+When the packaged Python is missing, which is what starting it from inside the zip looks like, it says to extract the whole download first.
 `-I` keeps the person's own Python settings and user packages out of the launcher.
 The batch file pauses only when the launcher reports a problem, so the message stays readable.
 
