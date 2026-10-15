@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from frog_classifier.app.models import ModelError, ModelInfo, newest_model
-from frog_classifier.app.paths import ROOT_VARIABLE, app_paths
+from frog_classifier.app.paths import MODELS_VARIABLE, ROOT_VARIABLE, app_paths
 from frog_classifier.training.artifact import RUN_METADATA
 
 
@@ -24,6 +24,13 @@ class AppPathsTests(unittest.TestCase):
             (paths.models, paths.uploads, paths.detections),
             (root / "models", root / "raw" / "uploads", root / "results" / "detections"),
         )
+
+    def test_the_models_variable_names_only_the_model_folder(self) -> None:
+        with patch.dict(os.environ, {ROOT_VARIABLE: "D:/frog-data", MODELS_VARIABLE: "E:/scanner/app/models"}):
+            paths = app_paths(Path("ignored"))
+
+        self.assertEqual(paths.models, Path("E:/scanner/app/models"))
+        self.assertEqual(paths.detections, Path("D:/frog-data") / "results" / "detections")
 
     def test_without_the_variable_the_default_root_is_used(self) -> None:
         environment = {name: value for name, value in os.environ.items() if name != ROOT_VARIABLE}

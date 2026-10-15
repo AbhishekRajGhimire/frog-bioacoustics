@@ -48,7 +48,7 @@ LOOK_DATE = "A date"
 FIGURE_TITLES = ("By hour of day", "24-hour clock", "By date")
 FIGURE_WRITERS = (write_time_of_day_figure, write_clock_figure, write_by_date_figure)
 LISTEN_LIMIT = 100
-DEVICES = {"cuda": "Using the graphics card.", "cpu": "Using the processor; a graphics card would be faster."}
+DEVICES = {"cuda": "Using the graphics card.", "cpu": "Using the processor."}
 VALIDATION_NOTICE = (
     "This detector was trained and checked on recordings from one site, IWS076, made between midnight and noon "
     "from January to April 2022. At other sites, seasons, or hours, listen to a sample of detections before "
@@ -515,6 +515,7 @@ def about_view(paths: AppPaths) -> None:
         st.warning(f"{str(error).capitalize()}.")
     else:
         st.write(f"Detector in use: {model.name}, threshold {model.threshold:.3f}.")
+    st.write(f"Results and uploaded recordings are kept in `{paths.root}`.")
     st.info(VALIDATION_NOTICE)
 
 

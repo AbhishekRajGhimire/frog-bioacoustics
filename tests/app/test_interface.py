@@ -167,6 +167,21 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(list(windows["Probability"]), ["0.900", "0.200"])
         self.assertEqual(len(app.get("audio")), 1)
 
+    def test_a_scan_on_the_processor_says_so_plainly(self) -> None:
+        record = self._record()
+        now = utc_timestamp(datetime.now(timezone.utc))
+        write_status(record, ScanStatus("running", now, now, False, found=10, processed=4, device="cpu"))
+
+        app = self._app()
+
+        self.assertIn("Using the processor.", self._texts(app.caption))
+        self.assertNotIn("graphics card", self._texts(app.caption))
+
+    def test_about_shows_where_results_are_kept(self) -> None:
+        app = self._app("About")
+
+        self.assertIn(f"`{self.root}`", self._texts(app.markdown))
+
     def test_a_card_whose_clock_was_never_set_shows_warnings_instead_of_failing(self) -> None:
         build_record(self.root / "results" / "detections" / self.folder, [
             recording("19700101_000000.WAV", "1970-01-01T00:00:00", (0.9, 0.2)),
