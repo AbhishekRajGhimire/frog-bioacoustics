@@ -37,6 +37,8 @@ GENERATED_PATHS = (
     "results/analytics/example.csv",
     "results/data_quality/example.json",
     "results/detections/external-resnet18-20261014T000000Z/detections.sqlite",
+    "dist/Frog Call Scanner/app/python/python.exe",
+    "dist/FrogCallScanner-0.1.0-0123456.zip",
 )
 
 DATA_PACKAGE_MODULES = (
@@ -87,6 +89,10 @@ APP_PACKAGE_MODULES = tuple(
         "__init__", "deployments", "dialog", "export", "launch", "listening", "models", "paths", "scan_job", "scans",
         "uploads",
     )
+)
+
+PACKAGING_PACKAGE_MODULES = tuple(
+    f"src/frog_classifier/packaging/{name}.py" for name in ("__init__", "build", "contents", "selfcheck")
 )
 
 OPERATIONAL_DOCUMENTS = (
@@ -145,6 +151,7 @@ OPERATIONAL_TEXT_FILES = (
     "classifier_app/app.py",
     "scripts/analyze_activity.py",
     "scripts/build_manifest.py",
+    "scripts/build_package.py",
     "scripts/detect_calls.py",
     "scripts/slice_audio.py",
     "scripts/sync_labeled_images.py",
@@ -198,6 +205,8 @@ class RepositoryLayoutTests(unittest.TestCase):
             "src/frog_classifier/files.py",
             *ANALYTICS_PACKAGE_MODULES,
             *APP_PACKAGE_MODULES,
+            *PACKAGING_PACKAGE_MODULES,
+            "scripts/build_package.py",
             "classifier_app/app.py",
         ):
             with self.subTest(required=relative_path):
