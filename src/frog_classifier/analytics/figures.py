@@ -64,6 +64,9 @@ def write_clock_figure(path: Path, activity: Activity) -> None:
             axes.bar(angle, limit, width=width, **_UNRECORDED)
     axes.set_ylim(0, limit)
     axes.yaxis.set_major_formatter(PercentFormatter(100))
+    # The percentage labels go along the quietest hour, so they never cover a tall bar.
+    quietest = min(range(24), key=lambda hour: activity.by_hour[hour].calling_share or 0.0)
+    axes.set_rlabel_position(math.degrees((quietest + 0.5) * width))
     axes.set_xticks([hour * width for hour in range(0, 24, 3)], labels=[f"{hour:02d}:00" for hour in range(0, 24, 3)])
     axes.set_title(f"Calls in recorded time by hour ({activity.time_basis.label})")
     axes.legend(handles=_legend(), loc="lower center", bbox_to_anchor=(0.5, -0.12), ncols=2)
