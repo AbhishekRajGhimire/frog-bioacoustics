@@ -258,14 +258,24 @@ class DependencyMetadataTests(unittest.TestCase):
         self.assertTrue(RUNTIME_DEPENDENCIES.issubset(exported_names))
 
         self.assertEqual(set(pyproject["dependency-groups"]["model"]), MODEL_GROUP_REQUIREMENTS)
+        # The site staff package installs the same versions, built for the processor alone.
+        self.assertEqual(set(pyproject["dependency-groups"]["model-cpu"]), MODEL_GROUP_REQUIREMENTS)
         self.assertEqual(pyproject["tool"]["uv"]["default-groups"], ["model"])
+        self.assertEqual(pyproject["tool"]["uv"]["conflicts"], [[{"group": "model"}, {"group": "model-cpu"}]])
         indexes = {index["name"]: index for index in pyproject["tool"]["uv"]["index"]}
         self.assertEqual(indexes["pytorch-cu130"]["url"], "https://download.pytorch.org/whl/cu130")
-        self.assertTrue(indexes["pytorch-cu130"]["explicit"])
+        self.assertEqual(indexes["pytorch-cpu"]["url"], "https://download.pytorch.org/whl/cpu")
+        for name in ("pytorch-cu130", "pytorch-cpu"):
+            with self.subTest(index=name):
+                self.assertTrue(indexes[name]["explicit"])
         for package in ("torch", "torchvision"):
             with self.subTest(source=package):
                 sources = pyproject["tool"]["uv"]["sources"][package]
-                self.assertEqual({source["index"] for source in sources}, {"pytorch-cu130"})
+                self.assertEqual(
+                    {(source["group"], source["index"]) for source in sources},
+                    {("model", "pytorch-cu130"), ("model-cpu", "pytorch-cpu")},
+                )
+        self.assertIn('source = { registry = "https://download.pytorch.org/whl/cpu" }', lock_path.read_text(encoding="utf-8"))
         # The launcher installs this export with pip; PyTorch would add gigabytes it never uses.
         export_text = export_path.read_text(encoding="utf-8")
         self.assertIn("--no-default-groups", export_text)

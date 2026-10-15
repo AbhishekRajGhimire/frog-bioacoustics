@@ -19,6 +19,10 @@ model = [
     "torch>=2.14,<2.15",
     "torchvision>=0.29,<0.30",
 ]
+model-cpu = [
+    "torch>=2.14,<2.15",
+    "torchvision>=0.29,<0.30",
+]
 
 [build-system]
 requires = ["hatchling>=1.27,<2"]
@@ -31,12 +35,24 @@ packages = ["src/frog_classifier"]
 package = true
 link-mode = "copy"
 default-groups = ["model"]
+conflicts = [[{ group = "model" }, { group = "model-cpu" }]]
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+torch = [
+    { index = "pytorch-cu130", group = "model", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+    { index = "pytorch-cpu", group = "model-cpu" },
+]
+torchvision = [
+    { index = "pytorch-cu130", group = "model", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+    { index = "pytorch-cpu", group = "model-cpu" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
