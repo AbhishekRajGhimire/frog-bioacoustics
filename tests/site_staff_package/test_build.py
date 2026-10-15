@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -10,21 +11,26 @@ from unittest.mock import patch
 from frog_classifier.packaging import build
 
 
+def make_repository(repo: Path) -> None:
+    """A committed repository with one packaged source file and one other file."""
+    (repo / "src" / "frog_classifier").mkdir(parents=True)
+    (repo / "src" / "frog_classifier" / "__init__.py").write_bytes(b"\n")
+    (repo / "notes.txt").write_bytes(b"notes\n")
+    for arguments in (
+        ("init", "--quiet"),
+        ("add", "."),
+        ("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "start"),
+    ):
+        subprocess.run(["git", *arguments], cwd=repo, check=True, capture_output=True)
+
+
 class SourceStateTests(unittest.TestCase):
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         self.repo = self.root / "repo"
-        (self.repo / "src" / "frog_classifier").mkdir(parents=True)
-        (self.repo / "src" / "frog_classifier" / "__init__.py").write_bytes(b"\n")
-        (self.repo / "notes.txt").write_bytes(b"notes\n")
-        self._git("init", "--quiet")
-        self._git("add", ".")
-        self._git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "start")
-
-    def _git(self, *arguments: str) -> None:
-        subprocess.run(["git", *arguments], cwd=self.repo, check=True, capture_output=True)
+        make_repository(self.repo)
 
     def test_a_committed_tree_is_not_uncommitted(self) -> None:
         commit, uncommitted = build.source_state(self.repo)
@@ -60,6 +66,36 @@ class SourceStateTests(unittest.TestCase):
         self.assertFalse(output.exists())
 
 
+class InstalledSourceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        self.repo = root / "repo"
+        make_repository(self.repo)
+        (self.repo / "src" / "frog_classifier" / "app").mkdir()
+        (self.repo / "src" / "frog_classifier" / "app" / "launch.py").write_bytes(b"new = True\n")
+        (self.repo / "src" / "frog_classifier" / "__pycache__").mkdir()
+        (self.repo / "src" / "frog_classifier" / "__pycache__" / "x.pyc").write_bytes(b"compiled")
+        self.installed = root / "site-packages" / "frog_classifier"
+        shutil.copytree(self.repo / "src" / "frog_classifier", self.installed)
+
+    def test_an_installed_copy_of_the_source_matches_it(self) -> None:
+        (self.installed / "__pycache__" / "y.pyc").write_bytes(b"compiled elsewhere")
+
+        self.assertEqual(build.installed_source_differences(self.repo, self.installed), [])
+
+    def test_stale_missing_and_leftover_installed_files_are_named(self) -> None:
+        (self.installed / "app" / "launch.py").write_bytes(b"new = False\n")
+        (self.repo / "src" / "frog_classifier" / "added.py").write_bytes(b"x = 1\n")
+        (self.installed / "removed.py").write_bytes(b"y = 1\n")
+
+        self.assertEqual(
+            build.installed_source_differences(self.repo, self.installed),
+            ["added.py", "removed.py", "app/launch.py"],
+        )
+
+
 class CommandTests(unittest.TestCase):
     def test_installing_python_leaves_the_computers_own_setup_alone(self) -> None:
         install_dir = Path("C:/staging/python-download")
@@ -72,10 +108,17 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--install-dir") + 1], str(install_dir))
 
     def test_dependencies_come_from_the_lock_with_the_processor_pytorch(self) -> None:
+        command = build.sync_command("uv", "frog-classifier")
+
         self.assertEqual(
-            build.sync_command("uv"),
-            ["uv", "sync", "--frozen", "--no-default-groups", "--group", "model-cpu", "--no-editable"],
+            command[:7], ["uv", "sync", "--frozen", "--no-default-groups", "--group", "model-cpu", "--no-editable"],
         )
+
+    def test_the_project_is_built_from_its_source_rather_than_an_earlier_build(self) -> None:
+        # uv otherwise reuses its cached build of the project until pyproject.toml changes.
+        command = build.sync_command("uv", "frog-classifier")
+
+        self.assertEqual(command[command.index("--reinstall-package") + 1], "frog-classifier")
 
     def test_the_self_check_sees_only_what_windows_programs_need(self) -> None:
         environment = build.essential_environment({

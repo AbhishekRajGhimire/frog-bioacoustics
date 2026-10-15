@@ -262,7 +262,8 @@ An uploaded file whose name already holds different recordings is refused rather
 | `selfcheck` | The checks the package's own Python runs before the build keeps it |
 
 The build installs CPython 3.13.14 with `uv python install --no-bin --no-registry`, so the build computer's own tools folder and registry never change.
-It then runs `uv sync --frozen --no-default-groups --group model-cpu --no-editable` with `UV_PROJECT_ENVIRONMENT` set to that Python, so every version and hash comes from `uv.lock`.
+It then runs `uv sync --frozen --no-default-groups --group model-cpu --no-editable --reinstall-package frog-classifier` with `UV_PROJECT_ENVIRONMENT` set to that Python, so every version and hash comes from `uv.lock`.
+`--reinstall-package` makes uv build the project from its source every time, because uv otherwise reuses its cached build until `pyproject.toml` changes, and the build then requires the installed `frog_classifier` to equal `src/frog_classifier` file for file, so a package never carries code other than the commit it names.
 It removes Python's `include`, `libs`, and `Scripts` folders, PyTorch's `include` and `share` folders, and every `.lib` file, which only compiling needs, and compiles every module with unchecked-hash bytecode, so the timestamps an unzip tool sets never make Python recompile.
 The whole run folder is copied, because loading a run checks every file `run.json` records.
 A package is built in a hidden folder under the output folder and replaces `Frog Call Scanner/` and the zip only after every check passes.

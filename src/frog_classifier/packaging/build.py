@@ -79,8 +79,32 @@ def python_install_command(uv: str, install_dir: Path) -> list[str]:
     return [uv, "python", "install", PYTHON_VERSION, "--install-dir", str(install_dir), "--no-bin", "--no-registry"]
 
 
-def sync_command(uv: str) -> list[str]:
-    return [uv, "sync", "--frozen", "--no-default-groups", "--group", DEPENDENCY_GROUP, "--no-editable"]
+def sync_command(uv: str, project: str) -> list[str]:
+    # uv reuses its cached build of the project until pyproject.toml changes, which
+    # would package older code under a newer commit, so the project is always rebuilt.
+    return [
+        uv, "sync", "--frozen", "--no-default-groups", "--group", DEPENDENCY_GROUP, "--no-editable",
+        "--reinstall-package", project,
+    ]
+
+
+def installed_source_differences(repo: Path, installed: Path) -> list[str]:
+    """Files of src/frog_classifier that installed lacks or holds differently, and files
+    installed holds that the source does not, as paths inside the package."""
+    source = repo / "src" / "frog_classifier"
+    listed = _git(repo, "ls-files", "--cached", "--others", "--exclude-standard", "--", "src/frog_classifier")
+    expected = {
+        PurePosixPath(line).relative_to("src/frog_classifier").as_posix()
+        for line in listed.splitlines()
+        if (repo / line).is_file() and "__pycache__" not in PurePosixPath(line).parts
+    }
+    present = {
+        path.relative_to(installed).as_posix()
+        for path in installed.rglob("*")
+        if path.is_file() and "__pycache__" not in path.relative_to(installed).parts
+    }
+    changed = (name for name in expected & present if (source / name).read_bytes() != (installed / name).read_bytes())
+    return sorted(expected ^ present) + sorted(changed)
 
 
 def essential_environment(environ: Mapping[str, str]) -> dict[str, str]:
@@ -115,13 +139,19 @@ def build_package(
         log(f"Installing Python {PYTHON_VERSION}...")
         _install_python(uv, staging / "python-download", python_dir)
         log("Installing the locked dependencies, with PyTorch for the processor...")
-        _run(sync_command(uv), cwd=repo, env=_sync_environment(os.environ, python_dir))
+        project = _project(repo)
+        _run(sync_command(uv, project["name"]), cwd=repo, env=_sync_environment(os.environ, python_dir))
+        stale = installed_source_differences(repo, python_dir / "Lib" / "site-packages" / "frog_classifier")
+        if stale:
+            raise BuildError(
+                f"the installed frog_classifier is not the source being packaged; it differs in {', '.join(stale[:5])}"
+            )
         prune(python_dir)
         log("Compiling the Python modules...")
         _compile(python_dir)
         _copy_app(repo, model_dir, package)
         info = BuildInfo(
-            version=_project_version(repo),
+            version=project["version"],
             commit=commit,
             uncommitted=uncommitted,
             built_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -188,8 +218,8 @@ def _copy_app(repo: Path, model_dir: Path, package: Path) -> None:
     shutil.copytree(model_dir, package / MODELS_FOLDER / model_dir.name)
 
 
-def _project_version(repo: Path) -> str:
-    return tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+def _project(repo: Path) -> dict:
+    return tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"]
 
 
 def _installed_version(python_dir: Path, distribution: str) -> str:
