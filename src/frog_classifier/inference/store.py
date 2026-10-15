@@ -109,9 +109,38 @@ class DetectionStore:
             if not tables:
                 created_at = _create(connection, identity, now)
             elif "scan" not in tables:
-                raise StoreError(f"{path} is not a detection database; choose another output folder")
+                raise StoreError(f"{path} is not a detection database")
             else:
-                created_at = _check_scan(connection, path, identity)
+                stored, created_at = _read_scan(connection, path)
+                changed = [name for name in _IDENTITY_COLUMNS if getattr(stored, name) != getattr(identity, name)]
+                if changed:
+                    raise StoreError(f"{path.parent} holds results for a different {', '.join(changed)}")
+        except StoreError as error:
+            connection.close()
+            raise StoreError(f"{error}; choose another output folder") from error
+        except BaseException:
+            connection.close()
+            raise
+        return cls(connection, identity, created_at)
+
+    @classmethod
+    def open_read_only(cls, path: Path) -> DetectionStore:
+        """Open an existing detection database for reading only, taking its identity from the database."""
+        if not path.is_file():
+            raise StoreError(f"{path} does not exist; run the detection command first")
+        # A non-empty rollback journal means a transaction is open or was cut off;
+        # a reader must not see the database until the next writer has settled it.
+        journal = path.with_name(f"{path.name}-journal")
+        if journal.is_file() and journal.stat().st_size > 0:
+            raise StoreError(
+                f"a detection run is still writing {path} or was interrupted; "
+                "let it finish, or run the same detection command again, before reading it"
+            )
+        connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            if "scan" not in _table_names(connection, path):
+                raise StoreError(f"{path} is not a detection database")
+            identity, created_at = _read_scan(connection, path)
         except BaseException:
             connection.close()
             raise
@@ -180,7 +209,7 @@ def _table_names(connection: sqlite3.Connection, path: Path) -> set[str]:
     try:
         rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
     except sqlite3.DatabaseError as error:
-        raise StoreError(f"{path} is not a detection database ({error}); choose another output folder") from error
+        raise StoreError(f"{path} is not a detection database ({error})") from error
     return {name for (name,) in rows}
 
 
@@ -197,18 +226,10 @@ def _create(connection: sqlite3.Connection, identity: ScanIdentity, now: str) ->
     return now
 
 
-def _check_scan(connection: sqlite3.Connection, path: Path, identity: ScanIdentity) -> str:
+def _read_scan(connection: sqlite3.Connection, path: Path) -> tuple[ScanIdentity, str]:
+    """The stored scan identity and creation time."""
     (version,) = connection.execute("SELECT schema_version FROM scan").fetchone()
     if version != SCHEMA_VERSION:
-        raise StoreError(
-            f"{path} uses detection schema {version}, but this code reads schema "
-            f"{SCHEMA_VERSION}; choose another output folder"
-        )
+        raise StoreError(f"{path} uses detection schema {version}, but this code reads schema {SCHEMA_VERSION}")
     row = connection.execute(f"SELECT created_at, {', '.join(_IDENTITY_COLUMNS)} FROM scan").fetchone()
-    stored = ScanIdentity(*row[1:])
-    changed = [name for name in _IDENTITY_COLUMNS if getattr(stored, name) != getattr(identity, name)]
-    if changed:
-        raise StoreError(
-            f"{path.parent} holds results for a different {', '.join(changed)}; choose another output folder"
-        )
-    return row[0]
+    return ScanIdentity(*row[1:]), row[0]

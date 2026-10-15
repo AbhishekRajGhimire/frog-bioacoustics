@@ -54,13 +54,13 @@ class DetectionStoreTests(unittest.TestCase):
         self._open().close()
         self._execute("UPDATE scan SET schema_version = 2")
 
-        with self.assertRaisesRegex(StoreError, "schema 2"):
+        with self.assertRaisesRegex(StoreError, "schema 2.*; choose another output folder"):
             DetectionStore.open(self.path, SCAN_IDENTITY, now="later")
 
     def test_a_file_that_is_not_a_database_is_refused(self) -> None:
         self.path.write_bytes(b"these bytes are not a database " * 40)
 
-        with self.assertRaisesRegex(StoreError, "is not a detection database"):
+        with self.assertRaisesRegex(StoreError, "is not a detection database.*; choose another output folder"):
             DetectionStore.open(self.path, SCAN_IDENTITY, now="later")
 
     def test_another_sqlite_database_is_refused(self) -> None:
@@ -68,6 +68,43 @@ class DetectionStoreTests(unittest.TestCase):
 
         with self.assertRaisesRegex(StoreError, "is not a detection database"):
             DetectionStore.open(self.path, SCAN_IDENTITY, now="later")
+
+    def test_a_read_only_store_takes_its_identity_from_the_database_and_cannot_write(self) -> None:
+        store = self._open()
+        store.save(recording_row("site/a.wav"), (0, 5), (0.25, 0.75))
+        store.close()
+        before = self.path.read_bytes()
+
+        with DetectionStore.open_read_only(self.path) as reader:
+            self.assertEqual(reader.identity, SCAN_IDENTITY)
+            self.assertEqual(reader.created_at, "2026-10-15T00:00:00Z")
+            self.assertEqual(reader.recording_rows(), [recording_row("site/a.wav")])
+            with self.assertRaises(sqlite3.OperationalError):
+                reader.save(recording_row("site/b.wav"), (0, 5), (0.1, 0.2))
+
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_reading_a_missing_database_says_to_run_detection_first(self) -> None:
+        with self.assertRaisesRegex(StoreError, "run the detection command first"):
+            DetectionStore.open_read_only(self.path)
+
+    def test_reading_a_database_that_is_mid_write_is_refused(self) -> None:
+        self._open().close()
+        self.path.with_name(f"{self.path.name}-journal").write_bytes(bytes(512))
+
+        with self.assertRaisesRegex(StoreError, "still writing .* or was interrupted"):
+            DetectionStore.open_read_only(self.path)
+
+    def test_reading_a_file_that_is_not_a_detection_database_is_refused(self) -> None:
+        for name, make in (
+            ("not a database", lambda: self.path.write_bytes(b"these bytes are not a database " * 40)),
+            ("another database", lambda: self._execute("CREATE TABLE other (value INTEGER)")),
+        ):
+            with self.subTest(file=name):
+                self.path.unlink(missing_ok=True)
+                make()
+                with self.assertRaisesRegex(StoreError, "is not a detection database"):
+                    DetectionStore.open_read_only(self.path)
 
     def test_a_recording_is_stored_with_all_of_its_windows(self) -> None:
         store = self._open()
