@@ -75,6 +75,11 @@ def recording_time(path: Path) -> RecordingTime:
     return RecordingTime(started_at, utc_offset, tuple(notes))
 
 
+def start_time_from_name(stem: str) -> datetime | None:
+    """The start time given by a YYYYMMDD_HHMMSS file name, or None."""
+    return _file_name_time(stem)[0]
+
+
 def audiomoth_comment(path: Path) -> str | None:
     """The INFO comment of a WAV file, where AudioMoth records its clock and time zone."""
     with path.open("rb") as handle:
