@@ -34,10 +34,11 @@ def build_record(
     recordings: Sequence[tuple[RecordingRow, tuple[float, ...]]],
     *,
     threshold: float = 0.5,
+    **identity_changes: object,
 ) -> Path:
     """A detection record folder whose model threshold is threshold."""
     record_dir.mkdir(parents=True, exist_ok=True)
-    identity = replace(SCAN_IDENTITY, threshold=threshold)
+    identity = replace(SCAN_IDENTITY, threshold=threshold, **identity_changes)
     with DetectionStore.open(record_dir / DATABASE_FILE, identity, now="2026-10-15T00:00:00Z") as store:
         for row, probabilities in recordings:
             store.save(row, tuple(range(0, 5 * len(probabilities), 5)), probabilities)

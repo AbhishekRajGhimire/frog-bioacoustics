@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import tempfile
 import time
 import unittest
@@ -67,6 +68,20 @@ class FigureTests(unittest.TestCase):
 
         self.assertLess(time.perf_counter() - start, 10)
         self._assert_png(path)
+
+
+    def test_figures_can_be_drawn_into_memory(self) -> None:
+        activity = read_test_activity(self.root / "record", [
+            recording("a/20220120_010000.WAV", "2022-01-20T01:00:00", (0.9, 0.1)),
+        ])
+
+        for writer in WRITERS:
+            with self.subTest(figure=writer.__name__):
+                buffer = io.BytesIO()
+                writer(buffer, activity)
+                buffer.seek(0)
+                with Image.open(buffer) as image:
+                    self.assertEqual(image.format, "PNG")
 
 
 if __name__ == "__main__":

@@ -66,6 +66,27 @@ class ReadActivityTests(unittest.TestCase):
         self.assertEqual(activity.by_date[date(2022, 1, 23)].recorded_windows, 1)
         self.assertEqual(activity.by_date[date(2022, 1, 24)].recorded_windows, 1)
         self.assertEqual((activity.by_hour[23].recorded_windows, activity.by_hour[0].recorded_windows), (1, 1))
+        self.assertEqual(
+            [f"{window.start:%Y-%m-%d %H:%M:%S}" for window in activity.windows],
+            ["2022-01-23 23:59:55", "2022-01-24 00:00:00"],
+        )
+
+    def test_recordings_whose_clock_was_never_set_are_left_out_and_counted(self) -> None:
+        # The record was created at 2026-10-15T00:00:00Z.
+        activity = read_test_activity(self.record, [
+            recording("a/20220123_010000.WAV", "2022-01-23T01:00:00", (0.9, 0.1)),
+            recording("b/19700101_000000.WAV", "1970-01-01T00:00:00", (0.9, 0.9)),
+            recording("c/20261016_000000.WAV", "2026-10-16T00:00:00", (0.9,)),
+            # Within 14 hours of the scan, so a recorder far ahead of UTC can have made it.
+            recording("d/20261015_130000.WAV", "2026-10-15T13:00:00", (0.1,)),
+        ])
+
+        self.assertEqual(activity.coverage.recordings_with_impossible_time, 2)
+        self.assertEqual(activity.coverage.unplaced_windows, 3)
+        self.assertEqual(
+            {window.recording_path for window in activity.windows},
+            {"a/20220123_010000.WAV", "d/20261015_130000.WAV"},
+        )
 
     def test_recordings_that_cannot_be_placed_and_failed_recordings_are_counted(self) -> None:
         activity = read_test_activity(self.record, [
@@ -79,6 +100,7 @@ class ReadActivityTests(unittest.TestCase):
             recordings=3,
             failed_recordings=1,
             recordings_without_time=1,
+            recordings_with_impossible_time=0,
             recordings_without_offset=1,
             stated_offsets=("+11:00",),
             unplaced_windows=2,

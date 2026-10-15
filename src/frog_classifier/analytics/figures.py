@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
+from typing import BinaryIO
 
 from matplotlib import dates as mdates
 from matplotlib.figure import Figure
@@ -28,7 +29,7 @@ _UNRECORDED = {"facecolor": "0.93", "edgecolor": "0.75", "hatch": "//", "linewid
 _DPI = 120
 
 
-def write_time_of_day_figure(path: Path, activity: Activity) -> None:
+def write_time_of_day_figure(target: Path | BinaryIO, activity: Activity) -> None:
     figure = Figure(figsize=(9, 5.5), layout="constrained")
     share_axes, effort_axes = figure.subplots(2, 1, sharex=True, height_ratios=(3, 1))
     recorded = [hour for hour, bin_ in enumerate(activity.by_hour) if bin_.recorded_windows]
@@ -45,10 +46,10 @@ def write_time_of_day_figure(path: Path, activity: Activity) -> None:
     effort_axes.set(ylabel="Recorded hours", xlabel=f"Hour of day ({activity.time_basis.label})", xlim=(-0.5, 23.5))
     effort_axes.set_xticks(range(24), labels=[f"{hour:02d}" for hour in range(24)])
     figure.suptitle(f"Calling activity by hour of day, threshold {activity.threshold:.3f}")
-    figure.savefig(path, dpi=_DPI, format="png")
+    figure.savefig(target, dpi=_DPI, format="png")
 
 
-def write_clock_figure(path: Path, activity: Activity) -> None:
+def write_clock_figure(target: Path | BinaryIO, activity: Activity) -> None:
     figure = Figure(figsize=(6.5, 6.5), layout="constrained")
     axes = figure.add_subplot(projection="polar")
     axes.set_theta_zero_location("N")
@@ -70,10 +71,10 @@ def write_clock_figure(path: Path, activity: Activity) -> None:
     axes.set_xticks([hour * width for hour in range(0, 24, 3)], labels=[f"{hour:02d}:00" for hour in range(0, 24, 3)])
     axes.set_title(f"Calls in recorded time by hour ({activity.time_basis.label})")
     axes.legend(handles=_legend(), loc="lower center", bbox_to_anchor=(0.5, -0.12), ncols=2)
-    figure.savefig(path, dpi=_DPI, format="png")
+    figure.savefig(target, dpi=_DPI, format="png")
 
 
-def write_by_date_figure(path: Path, activity: Activity) -> None:
+def write_by_date_figure(target: Path | BinaryIO, activity: Activity) -> None:
     figure = Figure(figsize=(10, 5.5), layout="constrained")
     share_axes, effort_axes = figure.subplots(2, 1, sharex=True, height_ratios=(3, 1))
     days = list(activity.by_date)
@@ -97,7 +98,7 @@ def write_by_date_figure(path: Path, activity: Activity) -> None:
     if not days:
         share_axes.text(0.5, 0.5, "No recording could be placed in time", transform=share_axes.transAxes, ha="center")
     figure.suptitle(f"Calling activity by date, threshold {activity.threshold:.3f}")
-    figure.savefig(path, dpi=_DPI, format="png")
+    figure.savefig(target, dpi=_DPI, format="png")
 
 
 def _unrecorded_runs(activity: Activity) -> list[tuple[date, date]]:

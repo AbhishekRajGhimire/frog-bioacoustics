@@ -29,7 +29,7 @@ OUTPUT_FILES = (
     REPORT_FILE, TIME_OF_DAY_FIGURE, CLOCK_FIGURE, BY_DATE_FIGURE, HOUR_TABLE, DATE_TABLE, WINDOWS_TABLE,
 )
 _BIN_COLUMNS = ("recorded_windows", "recorded_minutes", "recordings", "detected_windows", "calling_share")
-_WINDOW_COLUMNS = ("recording_path", "window_start_s", "date", "hour", "probability", "detected")
+_WINDOW_COLUMNS = ("recording_path", "window_start_s", "date", "time", "hour", "probability", "detected")
 
 
 def default_analysis_dir(results_root: Path, record_dir: Path) -> Path:
@@ -61,6 +61,7 @@ def analyze_record(
             "recording_path": window.recording_path,
             "window_start_s": window.window_start_s,
             "date": window.date.isoformat(),
+            "time": f"{window.start:%H:%M:%S}",
             "hour": window.hour,
             "probability": f"{window.probability:.8f}",
             "detected": int(activity.is_detected(window)),

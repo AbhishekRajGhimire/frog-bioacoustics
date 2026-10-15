@@ -17,8 +17,8 @@ _TABLE_HEADER = (
 )
 
 
-def summary_lines(activity: Activity) -> list[str]:
-    """The headline facts, shared by the report and the command's output."""
+def headline_lines(activity: Activity) -> list[str]:
+    """The headline facts: what was recorded, how much calling it held, and when."""
     recorded_dates = [day for day, bin_ in activity.by_date.items() if bin_.recorded_windows]
     if not recorded_dates:
         return ["No recording could be placed in time, so there is no activity to report."]
@@ -51,6 +51,38 @@ def summary_lines(activity: Activity) -> list[str]:
             "so daylight-saving changes cannot shift them."
         )
     return lines
+
+
+def coverage_warnings(activity: Activity) -> list[str]:
+    """What a reader must know about the recordings before trusting the results."""
+    coverage = activity.coverage
+    warnings = []
+    if coverage.recordings_with_impossible_time:
+        warnings.append(
+            f"Left out of every result by time: {_recordings(coverage.recordings_with_impossible_time)} "
+            "with an impossible date, before 2005 or after the scan, probably because the recorder's clock was not set."
+        )
+    if coverage.recordings_without_time:
+        warnings.append(
+            f"Left out of every result by time: {_recordings(coverage.recordings_without_time)} "
+            "with no start time in the file name."
+        )
+    if coverage.failed_recordings:
+        warnings.append(
+            f"Not included because reading failed: {_recordings(coverage.failed_recordings)}. "
+            "Scanning again retries failed recordings."
+        )
+    if coverage.recordings_without_offset:
+        warnings.append(
+            f"Taken to use {activity.time_basis.label} because no UTC offset is stated: "
+            f"{_recordings(coverage.recordings_without_offset)}."
+        )
+    return warnings
+
+
+def summary_lines(activity: Activity) -> list[str]:
+    """The headline facts and then the coverage warnings, for the report and the command's output."""
+    return [*headline_lines(activity), *coverage_warnings(activity)]
 
 
 def render_report(activity: Activity, record_name: str) -> str:
@@ -98,11 +130,16 @@ def render_report(activity: Activity, record_name: str) -> str:
         f"| Recordings analyzed | {coverage.recordings} |",
         f"| Failed recordings | {coverage.failed_recordings} |",
         f"| Recordings without a start time, left out | {coverage.recordings_without_time} |",
+        f"| Recordings with an impossible start time, left out | {coverage.recordings_with_impossible_time} |",
         f"| Recordings without a UTC offset, taken to use the time basis | {coverage.recordings_without_offset} |",
         f"| Windows that could not be placed in time | {coverage.unplaced_windows} |",
         "",
     ]
     return "\n".join(lines)
+
+
+def _recordings(count: int) -> str:
+    return "1 recording" if count == 1 else f"{count:,} recordings"
 
 
 def _bin_row(label: str, bin_: ActivityBin) -> str:

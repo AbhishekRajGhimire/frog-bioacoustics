@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from frog_classifier.analytics.report import render_report, summary_lines
+from frog_classifier.analytics.report import coverage_warnings, render_report, summary_lines
 from tests.analytics.helpers import read_test_activity, recording
 from tests.inference.helpers import SCAN_IDENTITY
 
@@ -59,9 +59,29 @@ class ReportTests(unittest.TestCase):
 
         self.assertEqual(
             summary_lines(activity),
-            ["No recording could be placed in time, so there is no activity to report."],
+            [
+                "No recording could be placed in time, so there is no activity to report.",
+                "Left out of every result by time: 1 recording with no start time in the file name.",
+            ],
         )
         self.assertIn("| Windows that could not be placed in time | 1 |", render_report(activity, "site-a"))
+
+    def test_coverage_problems_are_warned_about(self) -> None:
+        activity = read_test_activity(self.root / "record", [
+            recording("a/20220123_010000.WAV", "2022-01-23T01:00:00", (0.9,)),
+            recording("a/19700101_000000.WAV", "1970-01-01T00:00:00", (0.9,)),
+            recording("a/19700101_000500.WAV", "1970-01-01T00:05:00", (0.9,)),
+            recording("b/20220123_010000.WAV", "2022-01-23T01:00:00", (0.1,), utc_offset=None),
+            recording("a/broken.wav", None, (), utc_offset=None, status="failed", message="LibsndfileError: bad"),
+        ])
+
+        self.assertEqual(coverage_warnings(activity), [
+            "Left out of every result by time: 2 recordings with an impossible date, before 2005 or after the scan, "
+            "probably because the recorder's clock was not set.",
+            "Not included because reading failed: 1 recording. Scanning again retries failed recordings.",
+            "Taken to use UTC+11:00 because no UTC offset is stated: 1 recording.",
+        ])
+        self.assertIn("| Recordings with an impossible start time, left out | 2 |", render_report(activity, "site-a"))
 
 
 if __name__ == "__main__":

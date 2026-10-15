@@ -41,6 +41,7 @@ class AnalyzeRecordTests(unittest.TestCase):
 
         windows = read_csv(self.output / WINDOWS_TABLE)
         self.assertEqual(len(windows), 8)
+        self.assertEqual((windows[0]["date"], windows[0]["time"], windows[0]["hour"]), ("2022-01-20", "01:00:00", "1"))
         for table, key in ((HOUR_TABLE, "hour"), (DATE_TABLE, "date")):
             for row in read_csv(self.output / table):
                 with self.subTest(table=table, bin=row[key]):

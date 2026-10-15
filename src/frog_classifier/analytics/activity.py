@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Sequence
 
 from frog_classifier.inference.store import DetectionStore, ScanIdentity
@@ -19,6 +19,12 @@ from .timebase import TimeBasis, choose_time_basis, window_time
 
 # The threshold table always shows these beside the analysis threshold.
 TABLE_THRESHOLDS = (0.5, 0.7, 0.9, 0.95, 0.99)
+# A recorder whose clock was never set stamps 1970 (AudioMoth) or 2000 (many
+# others), so no real recording here starts before this.
+EARLIEST_PLAUSIBLE_START = datetime(2005, 1, 1)
+# Start times are a recorder's local clock, which runs at most 14 hours, the
+# largest UTC offset, ahead of the record's creation time in UTC.
+_LARGEST_CLOCK_LEAD = timedelta(hours=14)
 
 
 class ActivityError(ValueError):
@@ -29,9 +35,16 @@ class ActivityError(ValueError):
 class PlacedWindow:
     recording_path: str
     window_start_s: int
-    date: date
-    hour: int
+    start: datetime
     probability: float
+
+    @property
+    def date(self) -> date:
+        return self.start.date()
+
+    @property
+    def hour(self) -> int:
+        return self.start.hour
 
 
 @dataclass(frozen=True)
@@ -61,6 +74,7 @@ class Coverage:
     recordings: int
     failed_recordings: int
     recordings_without_time: int
+    recordings_with_impossible_time: int
     recordings_without_offset: int
     stated_offsets: tuple[str, ...]
     unplaced_windows: int
@@ -100,7 +114,13 @@ def read_activity(
         raise ActivityError(f"the threshold must be between 0 and 1, not {threshold}")
     rows = store.recording_rows()
     succeeded = [row for row in rows if row.status == "ok"]
-    timed = {row.path: row for row in succeeded if row.started_at is not None}
+    dated = [row for row in succeeded if row.started_at is not None]
+    latest_start = datetime.fromisoformat(store.created_at).replace(tzinfo=None) + _LARGEST_CLOCK_LEAD
+    timed = {
+        row.path: row
+        for row in dated
+        if EARLIEST_PLAUSIBLE_START <= datetime.fromisoformat(row.started_at) <= latest_start
+    }
     basis = choose_time_basis(utc_offset, (row.utc_offset for row in timed.values()))
 
     windows: list[PlacedWindow] = []
@@ -111,7 +131,7 @@ def read_activity(
             unplaced += 1
             continue
         moment = window_time(row.started_at, row.utc_offset, start_s, basis.zone)
-        windows.append(PlacedWindow(path, start_s, moment.date(), moment.hour, probability))
+        windows.append(PlacedWindow(path, start_s, moment, probability))
 
     def summarize(selected: Sequence[PlacedWindow]) -> ActivityBin:
         return ActivityBin(
@@ -146,7 +166,8 @@ def read_activity(
         coverage=Coverage(
             recordings=len(succeeded),
             failed_recordings=len(rows) - len(succeeded),
-            recordings_without_time=len(succeeded) - len(timed),
+            recordings_without_time=len(succeeded) - len(dated),
+            recordings_with_impossible_time=len(dated) - len(timed),
             recordings_without_offset=sum(row.utc_offset is None for row in timed.values()),
             stated_offsets=tuple(sorted({row.utc_offset for row in timed.values() if row.utc_offset is not None})),
             unplaced_windows=unplaced,
