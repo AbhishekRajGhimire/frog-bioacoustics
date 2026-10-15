@@ -2,19 +2,20 @@
 
 Frog Classifier turns long field recordings into fixed five-second Mel-spectrogram examples for careful human review and leakage-safe evaluation of *Litoria aurea* calls.
 Each image shows decibels above its own recording's noise floor, so faint calls stay visible and brightness means the same thing in every image.
-Phases 1, 2, and 4 are complete: the first ResNet-18 detector is trained, saved, and verified on one site's recordings, and batch detection on new recordings is next.
+Phases 1, 2, 4, and 5 are complete: the first ResNet-18 detector is trained, saved, and verified on one site's recordings, and it runs over whole folders of recordings into a resumable, traceable detection record.
+Activity analysis and a user-facing application are next.
 
 ## Start here
 
 - New to the repository? Read the beginner-friendly [project outline](docs/outline.md) first.
 - Read the [roadmap](roadmap.md) for planned phases and acceptance criteria.
 - Read the [architecture](docs/architecture.md) for storage contracts and package boundaries.
-- Read the [workflow](docs/workflow.md) for day-to-day preprocessing, labeling, manifest, and training commands.
+- Read the [workflow](docs/workflow.md) for day-to-day preprocessing, labeling, manifest, training, and detection commands.
 
 ## Pipeline
 
 ```text
-raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> ResNet-18 training and verification
+raw recordings -> spectrogram queue -> human labels -> versioned manifest -> grouped folds and reports -> ResNet-18 training and verification -> batch detection
 ```
 
 `raw/` holds immutable source recordings.
@@ -22,6 +23,7 @@ raw recordings -> spectrogram queue -> human labels -> versioned manifest -> gro
 `labeled/` holds human-selected PNGs and the generated manifest.
 `results/data_quality/` receives generated validation reports.
 `models/` receives saved training runs.
+`results/detections/` receives detection records.
 The manifest workflow trains directly from labeled images, so materialized split directories are not part of the tracked layout.
 
 ## Setup
@@ -85,6 +87,12 @@ Train, evaluate, and save the ResNet-18 detector, then prove the saved run repro
 ```powershell
 uv run python scripts/train_model.py
 uv run python scripts/verify_model.py models/<run folder>
+```
+
+Detect calls in every recording beneath a folder with a saved run; running it again continues an interrupted run:
+
+```powershell
+uv run python scripts/detect_calls.py models/<run folder> raw/external
 ```
 
 ## Labeling policy

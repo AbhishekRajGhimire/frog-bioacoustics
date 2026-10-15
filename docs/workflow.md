@@ -240,6 +240,12 @@ Recordings are rendered by several worker processes, by default half the logical
 uv run python scripts/detect_calls.py models/<run folder> raw/external --workers 4 --device cpu
 ```
 
+On the RTX 4080 laptop with 32 logical CPUs, the 618 five-minute recordings in `raw/external`, 51.5 hours of audio, took 427 seconds with one worker, 126 seconds with four, 76 seconds with eight, and 94 seconds with sixteen, so the default of eight was the fastest.
+Rendering takes nearly all of that time; prediction took about 14 seconds in total.
+Every worker count stored exactly the same probabilities, and for all 4,224 labeled clips the detection probability matched the saved run's own prediction within 0.000004.
+Each worker process uses about 250 MB of memory for five-minute recordings.
+If the command is killed outright, its workers exit on their own, and the next run continues from the last complete recording.
+
 ## Verify Phase 2 acceptance
 
 Run the real-data manifest twice and compare all three generated artifacts:

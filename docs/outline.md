@@ -15,8 +15,8 @@ The project divides recordings into five-second windows and turns each window in
 A person reviews those images and matching audio clips.
 Confident target calls become `litoria_aurea` examples, confident non-target sounds become `non_target` examples, and uncertain clips are skipped.
 
-The validated labels train and evaluate a ResNet-18 detector.
-Future phases will add batch detection, activity analysis, and a user-facing application.
+The validated labels train and evaluate a ResNet-18 detector, which then scans whole folders of recordings and records how likely every five-second window is to hold a frog call.
+Future phases will add activity analysis and a user-facing application.
 
 ## Current status
 
@@ -29,7 +29,10 @@ On recordings it never saw, it finds about 97 of every 100 frog clips and wrongl
 The result held when whole nights were held out.
 Every label comes from one site between January and March, recorded between midnight and noon, so performance elsewhere is still unknown.
 
-Phase 5, batch detection on new recordings, is next, and labeling continues for other sites and seasons.
+Phase 5 made the detector usable on whole folders of recordings.
+It scanned all 618 recordings, 51.5 hours of audio, in about 76 seconds, and it can be stopped and restarted without losing or repeating work.
+
+Phase 6, activity analysis and a user-facing application, is next, and labeling continues for other sites and seasons.
 
 See the [roadmap](../roadmap.md) for the complete sequence of project phases.
 
@@ -43,7 +46,8 @@ field recordings
     -> validated manifest
     -> recording-group folds and quality reports
     -> baseline and ResNet-18 training
-    -> future detections and activity analysis
+    -> batch detection over whole recordings
+    -> future activity analysis
 ```
 
 ### 1. Raw recordings
@@ -80,7 +84,14 @@ This prevents a model from being tested on audio that is too closely related to 
 It chooses its detection threshold on the validation fold, reports results on the test fold, compares itself with the simple baseline, and repeats the training with each fold held out in turn to show how stable the results are.
 Every run is saved as one folder under `models/` with the model, copies of its inputs, every prediction, and a readable `report.md`.
 `scripts/verify_model.py` reloads a saved run and proves it reproduces its own predictions.
-Batch detection on new recordings comes in a later phase.
+
+### 7. Batch detection
+
+`scripts/detect_calls.py` runs a saved model over every recording in a folder and its subfolders.
+It renders each recording exactly as the training images were rendered and stores the frog probability of every five-second window.
+The results go to one folder under `results/detections/`: a SQLite database that is the complete record, `detections.csv` with every window the model flags, and `recordings.csv` with every recording and its status.
+Every row names the source recording, the window, the recorder's clock time, and the exact model and preprocessing used.
+A file that cannot be read is recorded as failed instead of stopping the batch, and running the same command again continues where it stopped.
 
 ## Repository structure
 
@@ -119,16 +130,18 @@ frog-bioacoustics/
     train_baseline.py          run the strict sanity baseline
     train_model.py             train, evaluate, and save the ResNet-18 detector
     verify_model.py            prove a saved run reproduces its predictions
+    detect_calls.py            detect calls in every recording beneath a folder
 
   src/frog_classifier/         reusable Python package
     data/                      config, naming, manifests, folds, validation, and reports
     preprocessing/             Mel rendering, noise floor, PNG encoding, and display colours
     labeling/                  queue order, decision log, moves, and playback audio
     training/                  model, training loop, metrics, saved runs, and verification
+    inference/                 recordings, rendering, detection record, and CSV export
 
   tests/                       synthetic automated checks
   models/                      saved training runs
-  results/                     generated quality and analytics outputs
+  results/                     generated quality reports, detection records, and analytics
   classifier_app/              future user-facing application
 
   docs/
@@ -155,7 +168,7 @@ Git normally ignores:
 - Human-labeled image collections.
 - Generated manifests and quality reports.
 - Trained model artifacts.
-- Analytics outputs.
+- Detection records and analytics outputs.
 - Local Python environments such as `.venv`.
 
 Ignored does not mean unimportant.

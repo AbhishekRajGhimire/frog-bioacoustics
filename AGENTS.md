@@ -3,10 +3,10 @@
 ## Project purpose
 
 Frog Bioacoustics is building a trustworthy system for finding and analyzing *Litoria aurea* calls in field recordings.
-The pipeline converts recordings into five-second Mel spectrograms, supports careful human labeling, validates evaluation data, and will later support model training, batch detection, and activity analysis.
+The pipeline converts recordings into five-second Mel spectrograms, supports careful human labeling, validates evaluation data, trains and verifies a detector, runs it over whole folders of recordings, and will later support activity analysis.
 
-Phases 1, 2, and 4 are complete.
-Phase 5, batch inference, is next, while Phase 3 label expansion continues.
+Phases 1, 2, 4, and 5 are complete.
+Phase 6, activity analytics and a user-facing application, is next, while Phase 3 label expansion continues.
 The first ResNet-18 detector is trained and verified on one site and season, and it is not yet validated for other sites.
 
 ## Start with these documents

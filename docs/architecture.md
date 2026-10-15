@@ -16,6 +16,8 @@ flowchart LR
   D -->|"load validated rows"| E["Strict baseline<br/>logistic regression"]
   D -->|"train, rotate folds, choose threshold"| M["Saved run<br/>models/resnet18-time"]
   M -->|"recompute every probability"| V["Verified predictions"]
+  A -->|"render every window"| DET["Detection record<br/>results/detections/input-run"]
+  M -->|"model, threshold, preprocessing copy"| DET
 ```
 
 ## Storage contract
@@ -30,11 +32,13 @@ config/preprocessing.toml    versioned preprocessing and class contract
 config/training.toml         versioned training contract
 results/data_quality/        generated manifest validation reports
 models/<run>/                saved training runs: weights, input copies, predictions, metrics, report
-results/analytics/           future inference and analysis outputs
+results/detections/<input>-<run>/   detection records: detections.sqlite, detections.csv, recordings.csv
+results/analytics/           future activity analysis outputs
 src/frog_classifier/data/    manifest, splitting, validation, reporting, and configuration package
 src/frog_classifier/preprocessing/   Mel rendering, per-recording noise floor, PNG encoding, display colours
 src/frog_classifier/labeling/   session queue, decision log, moves, playback audio
 src/frog_classifier/training/   training configuration, model, training loop, metrics, saved runs, verification
+src/frog_classifier/inference/  batch detection: recordings, worker rendering, SQLite store, CSV export, detection runs
 docs/decisions/              dated design decisions with their evidence
 ```
 
@@ -111,7 +115,7 @@ Its featurization and classifier live in `frog_classifier.training.baseline`, so
 ## Model training
 
 `scripts/train_model.py` delegates to `frog_classifier.training.run`, which loads and validates the preprocessing configuration, [`config/training.toml`](../config/training.toml), and the manifest, then snapshots those three inputs and the git commit before anything trains.
-The package `__init__` re-exports nothing, so importing the baseline module never loads PyTorch, and nothing outside the package imports it.
+The package `__init__` re-exports nothing, so importing the baseline module never loads PyTorch.
 
 | Module | Responsibility |
 | --- | --- |
@@ -125,6 +129,7 @@ The package `__init__` re-exports nothing, so importing the baseline module neve
 | `artifact` | Staged run folders, checksums, and CSV and JSON reading and writing |
 | `report` | The Markdown report and the precision-recall figure, built only from `run.json` content |
 | `run` | One complete run from the manifest to a saved folder |
+| `saved` | Load a saved run's model, threshold, and preprocessing copy for prediction, refusing a run whose files changed |
 | `verify` | Reproduce a saved run's predictions |
 
 Rotation zero trains on the manifest's training folds, keeps the epoch with the best validation average precision, and is the saved model.
@@ -138,6 +143,32 @@ A run is written to `models/.resnet18-<UTC time>.partial/` and renamed to `model
 
 `scripts/verify_model.py` delegates to `frog_classifier.training.verify`, which checks every recorded checksum, reloads the weights without downloading anything, re-reads every image listed in `predictions.csv`, and compares each recomputed probability with the saved one within 0.0001.
 An image that is gone or whose bytes changed since training is reported as such rather than as a prediction mismatch.
+
+## Batch detection
+
+`scripts/detect_calls.py` delegates to `frog_classifier.inference.detect`, which loads a saved run through `frog_classifier.training.saved` and renders recordings with the run's own copy of the preprocessing configuration rather than the tracked one, so a later change to `config/preprocessing.toml` cannot change what a saved model is shown.
+The package `__init__` re-exports nothing, because the detection module imports PyTorch while the modules that worker processes import must not.
+
+| Module | Responsibility |
+| --- | --- |
+| `recordings` | Find `.wav` and `.mp3` files in sorted relative-path order, and read each recording's start time from its file name and its UTC offset from the AudioMoth header comment |
+| `rendering` | Read, hash, time, and render one recording into window images inside a worker process; any error becomes that recording's failure |
+| `store` | The SQLite record: the scan identity, one row per recording, one row per window, and one transaction per recording |
+| `export` | Rewrite `detections.csv` and `recordings.csv` from the database through a temporary file |
+| `detect` | One run: skip finished recordings, render in parallel, predict, store, export, and summarize |
+
+Detection shares `render_waveform_images` with the slicer: the slicer encodes those images as PNGs, and detection passes them straight to the model, so both see identical pixels.
+Worker processes are spawned rather than forked, ignore Ctrl+C, never import PyTorch, and exit on their own if the main process dies.
+The main process alone owns the GPU and the database connection, stores results in path order, and lets at most two rendered recordings per worker wait in memory.
+
+The database's `scan` row records the absolute input folder, run name, model checksum, threshold, preprocessing checksum, and window length; reopening it for anything different is refused, so one database never mixes results.
+`recordings` holds each recording's relative path, identifier, start time, UTC offset, size, audio checksum, duration, window count, status, message, and timings, and `windows` holds every window's start and probability.
+A window is a detection when its probability is at or above the run's threshold; that comparison happens at export rather than being stored, so a different threshold needs no re-run.
+A recording and all of its windows are written in one transaction, so an interruption leaves only whole recordings, and the next run skips every recording stored as `ok` and retries every one stored as `failed`.
+
+Times are the recorder's clock.
+The start time is the file name's timestamp, and the UTC offset is the one the recorder states in its header.
+AudioMoth recorders keep the offset they were configured with, so the two recordings made after daylight saving ended on 3 April 2022 still state UTC+11; converting to local wall-clock time needs the site's time zone rules, not the stored offset alone.
 
 ## Environment contract
 

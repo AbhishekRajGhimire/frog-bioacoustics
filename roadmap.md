@@ -16,12 +16,13 @@ Verified on October 14, 2026:
 - Unsure `labeled/unsure` clips: 42
 - Unique labeled recording groups in the manifest: 570
 - Saved models: 1 (`models/resnet18-20261014T114432Z`)
-- Inference or analytics result artifacts: 0
+- Detection records: 1 (`results/detections/external-resnet18-20261014T114432Z`, added October 15, 2026)
+- Analytics result artifacts: 0
 - Active Git branch: `main`
 
 Every spectrogram was regenerated under preprocessing schema version 2 with per-recording noise-floor rendering, and a 100-image sample re-rendered from raw audio byte for byte.
 Preprocessing accounts for every expected five-second example.
-The first ResNet-18 detector is trained, saved, and verified.
+The first ResNet-18 detector is trained, saved, and verified, and batch detection has scanned every recording.
 The project is now limited by label diversity: every label comes from one site, one season, and the hours between midnight and noon.
 
 ## Working principles
@@ -191,7 +192,7 @@ Performance at other sites, in other months, and in evening hours is still unmea
 
 ## Phase 5: Batch inference and structured detections
 
-Status: Next
+Status: Complete
 
 ### Purpose
 
@@ -215,9 +216,23 @@ Apply the validated model to new long recordings and preserve useful detection p
 - Output rows identify the exact model and preprocessing configuration used.
 - Performance is sufficient for the intended collection size and hardware.
 
+### Verified acceptance
+
+Verified on October 15, 2026 with run `models/resnet18-20261014T114432Z` over all 618 recordings in `raw/external`; the [design](docs/superpowers/specs/2026-10-15-batch-detection-design.md) records every decision.
+
+- Detection stored 37,080 windows from 618 recordings with no failures, and 8,080 windows were at or above the threshold of 0.794.
+- Runs with one, four, eight, and sixteen worker processes stored exactly the same probabilities, and for all 4,224 labeled clips the detection probability matched the saved run's own prediction within 0.000004.
+- A run killed outright twice, after 210 and 402 recordings, resumed each time without repeating or duplicating a recording, and the finished record was identical to an uninterrupted run.
+- Every `detections.csv` row names the recording path, window, clock time, UTC offset, probability, threshold, run name, model checksum, and preprocessing checksum.
+- The 51.5 hours of audio took 76 seconds with the default eight workers on the RTX 4080 laptop, about 2,400 times real time, against 427 seconds with one worker; rendering takes nearly all of the time.
+- Detections fall from about a third of all windows between midnight and 03:00 to 6% at 11:00, matching the calling pattern in the labels.
+
+The roadmap planned CSV first and SQLite later, but resumable processing settled it now: one SQLite transaction per recording leaves only whole recordings after any interruption, and the CSV files are rewritten from the database at the end of every run.
+Times are the recorder's clock: the AudioMoth recorders kept UTC+11 after daylight saving ended on 3 April 2022, so Phase 6 must convert to local time with the site's time zone rules.
+
 ## Phase 6: Activity analytics and user-facing application
 
-Status: Planned
+Status: Next
 
 ### Purpose
 
