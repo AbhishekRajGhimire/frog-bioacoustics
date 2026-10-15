@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import re
 import subprocess
 import tomllib
@@ -221,6 +222,15 @@ class RepositoryLayoutTests(unittest.TestCase):
                     continue
                 with self.subTest(document=relative_path, target=target):
                     self.assertTrue((document_path.parent / target_path).exists())
+
+    def test_test_folders_never_shadow_installed_modules(self) -> None:
+        # Test discovery puts tests/ first on the import path, so tests/packaging once
+        # replaced the packaging library that librosa needs and broke most of the suite.
+        installed = {name.lower() for name in importlib.metadata.packages_distributions()}
+        for folder in (REPO_ROOT / "tests").iterdir():
+            if (folder / "__init__.py").is_file():
+                with self.subTest(folder=folder.name):
+                    self.assertFalse(folder.name.lower() in installed, f"tests/{folder.name} hides the installed {folder.name}")
 
     def test_beginner_outline_is_discoverable(self) -> None:
         outline_path = REPO_ROOT / "docs/outline.md"
