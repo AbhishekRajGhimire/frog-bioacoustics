@@ -108,7 +108,7 @@ All times use one fixed UTC offset, so daylight-saving changes cannot shift acti
 
 ### 9. Application for site staff
 
-`uv run streamlit run classifier_app/app.py` opens the app in the browser.
+`uv run streamlit run classifier_app/app.py --server.address localhost` opens the app in the browser.
 Under Scan recordings, a person chooses a folder or memory card, or uploads a few files, names the deployment, and presses Scan.
 The scan runs in the background with a progress bar, can be stopped, and continues where it stopped.
 Under Results, the person sees the summary, warnings such as recorders whose clock was not set, the three charts, and the threshold table, lists the windows behind any hour or date and listens to them, and downloads everything as one zip file.

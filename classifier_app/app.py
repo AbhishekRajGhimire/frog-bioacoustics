@@ -1,6 +1,6 @@
 """Frog call scanner: find Litoria aurea calls in field recordings and see when frogs call.
 
-Start it with: uv run streamlit run classifier_app/app.py
+Start it with: uv run streamlit run classifier_app/app.py --server.address localhost
 Scans run in their own process, so this page never loads the model itself.
 """
 

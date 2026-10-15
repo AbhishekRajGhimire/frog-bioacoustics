@@ -327,6 +327,16 @@ class OperationalDocumentationTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)
 
+    def test_the_app_is_started_for_this_computer_only(self) -> None:
+        # Streamlit otherwise listens on every network interface, as the labeler launcher also prevents.
+        for relative_path in ("README.md", "docs/outline.md", "docs/workflow.md", "classifier_app/app.py"):
+            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            commands = re.findall(r"streamlit run classifier_app/app\.py[^\n`]*", text)
+            with self.subTest(file=relative_path):
+                self.assertTrue(commands)
+                for command in commands:
+                    self.assertIn("--server.address localhost", command)
+
     def test_documents_never_mention_the_retired_terminal_labeler(self) -> None:
         for relative_path in ("README.md", "AGENTS.md", "docs/outline.md", "docs/architecture.md", "docs/workflow.md"):
             text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")

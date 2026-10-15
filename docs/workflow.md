@@ -298,8 +298,10 @@ The app does scanning and analysis without a command line.
 Start it from the repository folder; it opens in the browser at `http://localhost:8501`:
 
 ```powershell
-uv run streamlit run classifier_app/app.py
+uv run streamlit run classifier_app/app.py --server.address localhost
 ```
+
+`--server.address localhost` keeps the app to this computer; without it, anyone on the same network could open it, list folders, and play recordings.
 
 Under **Scan recordings**, paste a folder or memory card location or press Browse, check how many recordings it found and their dates, name the deployment, and press Scan.
 A few recordings can be uploaded instead; they are saved under `raw/uploads/<name>/` and never overwritten.

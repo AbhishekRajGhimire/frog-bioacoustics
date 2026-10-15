@@ -105,7 +105,7 @@ uv run python scripts/analyze_activity.py results/detections/<record folder>
 Scan recordings and explore the results in the browser, without the command line:
 
 ```powershell
-uv run streamlit run classifier_app/app.py
+uv run streamlit run classifier_app/app.py --server.address localhost
 ```
 
 ## Labeling policy
