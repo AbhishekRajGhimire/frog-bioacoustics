@@ -2563,3 +2563,25 @@ Run the full suite, `git diff --check`, and the em dash scan over every changed 
 git add docs/workflow.md docs/architecture.md docs/outline.md README.md roadmap.md AGENTS.md
 git commit -m "docs: document batch detection and its measured results"
 ```
+
+## Execution record
+
+Executed inline on `main` on October 15, 2026, with a final self-review instead of a separate reviewer.
+
+Rulings made during execution:
+
+- The work ran on `main` in the current checkout, as Phase 4 did; commits would move to a branch before any push if that were wanted.
+- `PreprocessingConfig` holds a read-only mapping that cannot be pickled, so render jobs could not reach worker processes; the configuration now pickles its classes as a plain dictionary, with a test.
+- A hard kill of the real run left all eight rendering workers alive and idle, because each worker holds its own end of the job queue; every worker now watches its parent process and exits when it ends, with a test that kills a real parent process.
+- The final review found that resuming trusted file names alone, while recorders on the same schedule write identical names on every card; each recording now stores a SHA-256 of its first 64 KiB, and a run refuses to continue when a different file sits under a stored name.
+- The same review found that a drive root has no folder name for the default output folder; the command now asks for `--output` instead.
+- The detection schema stayed at version 1 while gaining `head_sha256`, because the format was never released and this session's databases were regenerated.
+
+The very first run of the detection tests, while the pickling bug was present, stalled past a five-minute timeout; it did not recur in 23 later runs, including exact replays, or in any real-data run.
+
+Deferred minor items:
+
+- `AUDIO_SUFFIXES` in `inference/recordings.py` repeats `SUPPORTED_EXTS` in `scripts/slice_audio.py`.
+- A `scan` table without its row, which only tampering produces, raises a `TypeError` instead of a `StoreError`.
+- A kill between writing and swapping a CSV file leaves a hidden `.partial` file until the next run overwrites it.
+- Two cards with different file names written to one explicitly chosen `--output` folder are merged into one record; the workflow asks for one output folder per card or deployment.
