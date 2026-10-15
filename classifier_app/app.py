@@ -394,13 +394,13 @@ def _results(paths: AppPaths, deployment: Deployment) -> None:
 def _look_closer(paths: AppPaths, deployment: Deployment, activity: Activity) -> None:
     folder = deployment.record_dir.name
     st.markdown("#### Look closer")
+    if not activity.windows:
+        st.info("No recording has a usable date and time, so there are no hours or dates to look at.")
+        return
     st.caption("Pick an hour of day or a date to see every five-second window behind its bar, and listen to any of them.")
     mode = st.radio("Look at", (LOOK_HOUR, LOOK_DATE), horizontal=True, key=f"look:{folder}")
     if mode == LOOK_HOUR:
         hours = [hour for hour, bin_ in enumerate(activity.by_hour) if bin_.recorded_windows]
-        if not hours:
-            st.info("No window could be placed in time.")
-            return
         hour = st.selectbox(
             "Hour of day",
             hours,

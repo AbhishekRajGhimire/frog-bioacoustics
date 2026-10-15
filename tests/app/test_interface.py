@@ -167,6 +167,17 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(list(windows["Probability"]), ["0.900", "0.200"])
         self.assertEqual(len(app.get("audio")), 1)
 
+    def test_a_card_whose_clock_was_never_set_shows_warnings_instead_of_failing(self) -> None:
+        build_record(self.root / "results" / "detections" / self.folder, [
+            recording("19700101_000000.WAV", "1970-01-01T00:00:00", (0.9, 0.2)),
+            recording("19700101_001000.WAV", "1970-01-01T00:10:00", (0.1,)),
+        ], input_root=self.card.as_posix(), model_run=self.run_dir.name)
+        app = self._app("Results")
+
+        self.assertIn("impossible date", self._texts(app.warning))
+        self.assertIn("No recording has a usable date and time", self._texts(app.info))
+        self.assertNotIn(f"look:{self.folder}", [radio.key for radio in app.radio])
+
     def test_a_deployment_still_scanning_shows_progress_instead_of_results(self) -> None:
         self._scanning(self._record())
 
