@@ -17,10 +17,11 @@ from typing import Callable, Iterator
 import numpy as np
 import torch
 
+from frog_classifier.files import FileInUseError
 from frog_classifier.training.fit import predict_probabilities, use_full_precision
 from frog_classifier.training.saved import SavedRun, load_saved_run
 
-from .export import ExportError, export_csv
+from .export import export_csv
 from .recordings import file_head_sha256, find_recordings
 from .rendering import RenderedRecording, RenderJob, render_for_detection, start_render_worker
 from .store import DATABASE_FILE, DetectionStore, RecordingRow, ScanIdentity
@@ -154,8 +155,10 @@ def detect_calls(
         csv_problem = None
         try:
             export_csv(store, output_dir)
-        except ExportError as error:
-            csv_problem = str(error)
+        except FileInUseError as error:
+            csv_problem = (
+                f"{error}. The detection database is complete, so running it again only rewrites the CSV files."
+            )
         recordings = store.recording_rows()
         detections = len(store.windows(minimum_probability=saved.threshold))
     return DetectionSummary(

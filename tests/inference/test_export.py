@@ -5,12 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from frog_classifier.inference.export import (
-    DETECTIONS_CSV,
-    RECORDINGS_CSV,
-    ExportError,
-    export_csv,
-)
+from frog_classifier.files import FileInUseError
+from frog_classifier.inference.export import DETECTIONS_CSV, RECORDINGS_CSV, export_csv
 from frog_classifier.inference.store import DATABASE_FILE, DetectionStore
 from frog_classifier.training.artifact import read_csv
 from tests.inference.helpers import SCAN_IDENTITY, recording_row
@@ -69,8 +65,8 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(rows[1]["message"], "LibsndfileError: bad header")
 
     def test_a_csv_that_cannot_be_replaced_is_explained_and_leaves_no_partial_file(self) -> None:
-        with patch("frog_classifier.inference.export.os.replace", side_effect=PermissionError(13, "Permission denied")):
-            with self.assertRaisesRegex(ExportError, "detections.csv could not be replaced.*run the same command again"):
+        with patch("frog_classifier.files.os.replace", side_effect=PermissionError(13, "Permission denied")):
+            with self.assertRaisesRegex(FileInUseError, "detections.csv could not be replaced.*run the same command again"):
                 export_csv(self.store, self.output)
 
         self.assertEqual(sorted(path.name for path in self.output.iterdir()), [DATABASE_FILE])

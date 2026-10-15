@@ -6,6 +6,7 @@ import unittest
 import warnings
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -101,6 +102,14 @@ class DetectCallsTests(unittest.TestCase):
         self.assertIsNone(summary.csv_problem)
         self.assertTrue((self.output / DETECTIONS_CSV).is_file())
         self.assertTrue((self.output / RECORDINGS_CSV).is_file())
+
+    def test_a_spreadsheet_that_cannot_be_replaced_is_reported_and_the_record_is_kept(self) -> None:
+        with patch("frog_classifier.files.os.replace", side_effect=PermissionError(13, "Permission denied")):
+            summary = self._detect()
+
+        self.assertIn("detections.csv could not be replaced", summary.csv_problem)
+        self.assertIn("The detection database is complete", summary.csv_problem)
+        self.assertEqual(self._query("SELECT COUNT(*) FROM recordings"), [(4,)])
 
     def test_probabilities_equal_predictions_on_the_slicer_images(self) -> None:
         self._detect()

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from frog_classifier.files import replace_file
 from frog_classifier.training.artifact import write_csv
 
 from .store import DetectionStore
@@ -23,10 +23,6 @@ RECORDING_COLUMNS = (
     "recording_path", "recording_id", "started_at", "utc_offset", "status", "windows",
     "detections", "duration_s", "audio_sha256", "message",
 )
-
-
-class ExportError(Exception):
-    pass
 
 
 def export_csv(store: DetectionStore, output_dir: Path) -> None:
@@ -78,15 +74,4 @@ def _clock_time(started_at: str | None, offset_s: int) -> str | None:
 
 
 def _replace(path: Path, columns: Sequence[str], rows: Iterable[Mapping[str, object]]) -> None:
-    """Write beside the target and then swap it in, so no reader sees half a file."""
-    staging = path.with_name(f".{path.name}.partial")
-    write_csv(staging, columns, rows)
-    try:
-        os.replace(staging, path)
-    except PermissionError as error:
-        staging.unlink()
-        raise ExportError(
-            f"{path.name} could not be replaced, probably because it is open in another program. "
-            "The detection database is complete: close the file and run the same command again "
-            "to rewrite the CSV files."
-        ) from error
+    replace_file(path, lambda staging: write_csv(staging, columns, rows))
