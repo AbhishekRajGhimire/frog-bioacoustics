@@ -2682,3 +2682,32 @@ Expected: one folder with the report, three figures, three tables, and both dete
 - [ ] **Step 2: Verify and commit**
 
 Run the full suite, `git diff --check`, and the em dash scan over every changed file, then commit the documents.
+
+---
+
+## Execution record
+
+Executed inline on `main` on October 15, 2026, with a final self-review instead of a separate reviewer.
+
+Rulings made during execution:
+
+- `test_figures_can_be_drawn_into_memory` passed before its change, as the plan predicted, because matplotlib already accepted a stream; the test pins the app's reliance on it.
+- The browser check found three display defects: the drive hint lost the backslash in `E:\` to Markdown, the threshold table showed meaningless row numbers, and probabilities read 1 beside 0.002; each was fixed with an interface test.
+- Streamlit's developer toolbar, with its Deploy button, still shows; part 3, packaging, owns how the app is started and will hide it and turn off Streamlit's usage statistics.
+- The scan process writes "finished" a moment before it exits, and Windows will not delete its open `scan.log`, so the end-to-end interface test once failed in cleanup; it now waits for the launched process and asserts that it exits with 0.
+- Streamlit's test harness cannot simulate an upload or a download, so saving uploads and building the zip are tested directly, and the roadmap says so.
+- The final review found that Look closer failed when no recording had a usable date, as on a card whose clock was never set, and the date view was chosen; it now shows a message and no controls, with a test.
+- The final review found that the documented command let Streamlit listen on every network interface, so anyone on the same network could list folders and play recordings; every documented command now adds `--server.address localhost`, as the labeler launcher does, with a test, and the app then listens on 127.0.0.1 and ::1 only.
+- The download's `detections.csv` lists windows at the model's threshold even when another threshold is chosen; every row states its threshold, and the report and `windows.csv` use the chosen one, so it stays as it is.
+
+Deferred minor items:
+
+- A memory card mounted at a different drive letter cannot continue its earlier scan, because the record's identity holds the absolute folder; scanning it under a new name works.
+- The folder preview walks the whole folder on every page interaction, so pasting a whole drive such as `D:\` is slow.
+- Uploads are saved before the name is checked, so a refused start can leave copies in `raw/uploads/<name>/`.
+- The Scan button is enabled with an empty name, such as after choosing a card's root; the error explains, but disabling it would be clearer.
+- A scan process that fails before its first status reads as "ended unexpectedly" without pointing to `scan.log`.
+- A recording that became unreadable after its scan raises an unhandled decode error when listening.
+- The Listen to choice keeps its position when the threshold changes, so it can point at another window; its label shows which.
+- The comment on `scans._launched` does not say that it keeps process handles alive so Python does not warn about a running child.
+- Browse was checked on Windows only; macOS needs Tk on the main thread.
