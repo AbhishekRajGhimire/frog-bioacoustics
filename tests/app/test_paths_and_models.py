@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,6 +29,18 @@ class AppPathsTests(unittest.TestCase):
         environment = {name: value for name, value in os.environ.items() if name != ROOT_VARIABLE}
         with patch.dict(os.environ, environment, clear=True):
             self.assertEqual(app_paths(Path("repo")).root, Path("repo"))
+
+    def test_the_app_modules_do_not_load_pytorch(self) -> None:
+        modules = ("deployments", "dialog", "export", "listening", "models", "paths", "scan_job", "scans", "uploads")
+        imports = ", ".join(f"frog_classifier.app.{name}" for name in modules)
+        result = subprocess.run(
+            [sys.executable, "-c", f"import sys, {imports}; print('torch' in sys.modules)"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        self.assertEqual(result.stdout.strip(), "False")
 
 
 class NewestModelTests(unittest.TestCase):

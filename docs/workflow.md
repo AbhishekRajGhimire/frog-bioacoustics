@@ -291,6 +291,24 @@ Calls were detected in 21.8% of recorded time at the model's threshold of 0.794,
 The overall share moves only from 22.2% to 20.8% between thresholds of 0.5 and 0.99, because almost every probability sits near 0 or 1.
 Every hour and date value was reproduced from `windows.csv` and, for each hour, from a direct query of the detection database.
 
+## Use the app
+
+The app does scanning and analysis without a command line.
+Start it from the repository folder; it opens in the browser at `http://localhost:8501`:
+
+```powershell
+uv run streamlit run classifier_app/app.py
+```
+
+Under **Scan recordings**, paste a folder or memory card location or press Browse, check how many recordings it found and their dates, name the deployment, and press Scan.
+A few recordings can be uploaded instead; they are saved under `raw/uploads/<name>/` and never overwritten.
+The scan runs in its own process and shows its progress, can be stopped, and continues where it stopped; closing the app's console window also stops it.
+Under **Results**, pick a deployment to see the summary, warnings, the three charts, and the threshold table, change the threshold or the UTC offset, list the windows behind any hour or date and listen to them, and download everything as one zip file.
+Results appear only once a deployment's scan has finished.
+
+Each deployment's record folder is `results/detections/<name>-<model run>/`.
+Beside the detection files it holds `deployment.json`, the name and source folder; `scan_status.json`, the scan's progress; and `scan.log`, the scan process's output.
+
 ## Verify Phase 2 acceptance
 
 Run the real-data manifest twice and compare all three generated artifacts:

@@ -81,6 +81,13 @@ ANALYTICS_PACKAGE_MODULES = tuple(
     for name in ("__init__", "activity", "analyze", "figures", "report", "timebase")
 )
 
+APP_PACKAGE_MODULES = tuple(
+    f"src/frog_classifier/app/{name}.py"
+    for name in (
+        "__init__", "deployments", "dialog", "export", "listening", "models", "paths", "scan_job", "scans", "uploads",
+    )
+)
+
 OPERATIONAL_DOCUMENTS = (
     "README.md",
     "roadmap.md",
@@ -134,6 +141,7 @@ OPERATIONAL_TEXT_FILES = (
     "docs/outline.md",
     "docs/architecture.md",
     "docs/workflow.md",
+    "classifier_app/app.py",
     "scripts/analyze_activity.py",
     "scripts/build_manifest.py",
     "scripts/detect_calls.py",
@@ -188,6 +196,8 @@ class RepositoryLayoutTests(unittest.TestCase):
             *INFERENCE_PACKAGE_MODULES,
             "src/frog_classifier/files.py",
             *ANALYTICS_PACKAGE_MODULES,
+            *APP_PACKAGE_MODULES,
+            "classifier_app/app.py",
         ):
             with self.subTest(required=relative_path):
                 self.assertTrue((REPO_ROOT / relative_path).is_file())
@@ -312,6 +322,7 @@ class OperationalDocumentationTests(unittest.TestCase):
             "uv run python scripts/verify_model.py",
             "uv run python scripts/detect_calls.py",
             "uv run python scripts/analyze_activity.py",
+            "uv run streamlit run classifier_app/app.py",
         ):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)
