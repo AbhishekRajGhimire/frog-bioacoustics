@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 import unittest
 import warnings
 from pathlib import Path
@@ -52,6 +53,20 @@ class FigureTests(unittest.TestCase):
         ])
 
         self._write_all(activity, "{writer}.png")
+
+    def test_a_record_spanning_decades_draws_its_date_figure_quickly(self) -> None:
+        # A recorder whose clock was never set names its files 1970-01-01.
+        activity = read_test_activity(self.root / "record", [
+            recording("a/19700101_000000.WAV", "1970-01-01T00:00:00", (0.9,)),
+            recording("a/20220120_010000.WAV", "2022-01-20T01:00:00", (0.9,)),
+        ])
+        path = self.root / "by_date.png"
+
+        start = time.perf_counter()
+        write_by_date_figure(path, activity)
+
+        self.assertLess(time.perf_counter() - start, 10)
+        self._assert_png(path)
 
 
 if __name__ == "__main__":

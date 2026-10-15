@@ -7,7 +7,7 @@ areas, so missing effort can never look like an absence of calls.
 from __future__ import annotations
 
 import math
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from matplotlib import dates as mdates
@@ -78,17 +78,18 @@ def write_by_date_figure(path: Path, activity: Activity) -> None:
     share_axes, effort_axes = figure.subplots(2, 1, sharex=True, height_ratios=(3, 1))
     days = list(activity.by_date)
     recorded = [day for day in days if activity.by_date[day].recorded_windows]
-    for day in days:
-        if day not in recorded:
-            middle = datetime.combine(day, time())
-            share_axes.axvspan(middle - timedelta(hours=12), middle + timedelta(hours=12), **_UNRECORDED)
+    # One span per run of missing dates: a recorder whose clock was never set
+    # stamps 1970, and a span per date would then mean tens of thousands of them.
+    for first, last in _unrecorded_runs(activity):
+        start, end = datetime.combine(first, time()), datetime.combine(last, time())
+        share_axes.axvspan(start - timedelta(hours=12), end + timedelta(hours=12), **_UNRECORDED)
     shares = [100 * activity.by_date[day].calling_share for day in recorded]
     share_axes.bar(recorded, shares, width=0.8, color=_CALLS)
     share_axes.set(ylim=(0, _share_limit(shares)), ylabel="Calls in recorded time")
     share_axes.yaxis.set_major_formatter(PercentFormatter(100))
     share_axes.legend(handles=_legend(), loc="upper right")
     share_axes.grid(axis="y", alpha=0.3)
-    effort_axes.bar(days, [activity.by_date[day].recorded_minutes / 60 for day in days], width=0.8, color=_EFFORT)
+    effort_axes.bar(recorded, [activity.by_date[day].recorded_minutes / 60 for day in recorded], width=0.8, color=_EFFORT)
     effort_axes.set(ylabel="Recorded hours", xlabel=f"Date ({activity.time_basis.label})")
     locator = mdates.AutoDateLocator()
     effort_axes.xaxis.set_major_locator(locator)
@@ -97,6 +98,19 @@ def write_by_date_figure(path: Path, activity: Activity) -> None:
         share_axes.text(0.5, 0.5, "No recording could be placed in time", transform=share_axes.transAxes, ha="center")
     figure.suptitle(f"Calling activity by date, threshold {activity.threshold:.3f}")
     figure.savefig(path, dpi=_DPI, format="png")
+
+
+def _unrecorded_runs(activity: Activity) -> list[tuple[date, date]]:
+    """The first and last date of each run of consecutive dates without recordings."""
+    runs: list[tuple[date, date]] = []
+    for day, bin_ in activity.by_date.items():
+        if bin_.recorded_windows:
+            continue
+        if runs and runs[-1][1] == day - timedelta(days=1):
+            runs[-1] = (runs[-1][0], day)
+        else:
+            runs.append((day, day))
+    return runs
 
 
 def _share_limit(shares: list[float]) -> float:

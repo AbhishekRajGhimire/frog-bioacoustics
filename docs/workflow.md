@@ -285,7 +285,7 @@ The report repeats the totals at thresholds from 0.5 to 0.99 so it is clear how 
 If a detection run is still writing the record, or was interrupted, the command refuses to read it until the same detection command has been run again.
 A report or table open in another program cannot be replaced; close it and run the command again.
 
-The analysis of `results/detections/external-resnet18-20261014T114432Z` took about two seconds.
+The analysis of `results/detections/external-resnet18-20261014T114432Z` took about a second.
 It covers 51.5 hours in 618 recordings on 58 of the 76 dates from 20 January to 5 April 2022, all between 00:00 and 11:59 at UTC+11:00, so nothing is known about the afternoon and evening.
 Calls were detected in 21.8% of recorded time at the model's threshold of 0.794, from 34.2% between 01:00 and 02:00 down to 6.3% between 11:00 and 12:00.
 The overall share moves only from 22.2% to 20.8% between thresholds of 0.5 and 0.99, because almost every probability sits near 0 or 1.
