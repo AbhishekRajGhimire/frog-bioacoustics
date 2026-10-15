@@ -1816,3 +1816,26 @@ Open the three PNG files and confirm that unrecorded hours and dates are hatched
 - [ ] **Step 2: Verify and commit**
 
 Run the full suite, `git diff --check`, and the em dash scan over every changed file, then commit the documents.
+
+## Execution record
+
+Executed inline on `main` on October 15, 2026, with a final self-review instead of a separate reviewer.
+
+Rulings made during execution:
+
+- The work ran on `main` in the current checkout, as Phases 4 and 5 did.
+- The threshold check lives in `read_activity` as `ActivityError` rather than in `analyze.py` as the spec's `AnalysisError`, because the application will call `read_activity` directly and the check belongs where the threshold is used.
+- The writer's "choose another output folder" advice moved into one place in `DetectionStore.open`, so the read-only path can give its own advice; two existing refusal tests now pin that advice, and a read-only test covers an SQLite file without a `scan` table.
+- The figure tests turn matplotlib warnings into errors, so "no warnings" is asserted rather than eyeballed.
+- On the real clock figure the percentage labels covered the tallest bars; they now sit along the quietest hour.
+- The roadmap test required the literal `Status: Next`, which no phase has once Phase 6 is honestly in progress; it now requires every phase to carry one status from Complete, In progress, Next, or Planned.
+- The final review found that the by-date figure took 41 seconds for a record spanning 1970 to 2022, which one recorder with an unset clock produces, because it drew one hatched span per missing date; each run of missing dates is now one span, with a test, and the figure takes 0.2 seconds.
+- Analysis at the same moment as a detection run on the same record is not supported yet: the journal check refuses only while a transaction is open, and the two reads are separate snapshots; the application part must decide whether analysis waits for detection or the record moves to SQLite's WAL mode.
+- Implausible recording dates such as 1970 are reported rather than filtered: the summary states the date span and how many dates were recorded, which exposes an unset clock, and the application can turn that into a warning.
+
+Deferred minor items:
+
+- The summary counts every successful recording but the hours count only placed windows, so recordings without a start time inflate "in N recordings".
+- A file open in another program stops the analysis partway, leaving a mix of new and old files until the rerun.
+- `replace_file` leaves its `.partial` file if the write itself fails, for example on a full disk.
+- A crashed detection run whose journal appears between the journal check and the connection gives the "not a detection database" message instead of the interrupted-run advice.
