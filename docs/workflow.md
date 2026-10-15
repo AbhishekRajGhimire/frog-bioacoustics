@@ -339,7 +339,7 @@ It removes files that only compiling needs, compiles every module, copies the ap
 It then checks the package with the package's own Python, in an environment without this computer's Python, uv, or repository: the import path stays inside the package, the app modules load without PyTorch, PyTorch is the processor build, the model loads and its checksums match, a synthetic recording is scanned with worker processes, the app page renders, and the launcher's Streamlit start serves it.
 The build also fails when any path inside the package is longer than 160 characters, which leaves 100 for wherever the zip is extracted before Windows' 260-character limit.
 Only when everything passes does it replace `dist/Frog Call Scanner/` and write `dist/FrogCallScanner-<version>-<commit>.zip`; `--output` names a folder other than `dist/`.
-A failed build leaves the previous package as it was.
+A build that fails a check leaves the previous package as it was.
 
 ```text
 Frog Call Scanner/
@@ -354,7 +354,7 @@ Frog Call Scanner/
 
 Share the zip file.
 Staff right-click it, choose Extract All, and double-click `Start Frog Call Scanner`; `How to use.txt` takes them through it, including the warning Windows shows because the package is not signed.
-The launcher opens the app in the browser at `http://localhost:8571`, or opens the running app when it is started a second time.
+The launcher opens the app in the browser at `http://localhost:8571`, or opens the running app when it is started a second time, even while the first start is still under way.
 Closing its black window stops the app and any scan, and the scan continues later from Continue scan.
 If the computer lacks Microsoft's C++ runtime, which PyTorch needs, the window says to install the Visual C++ Redistributable (x64) from `https://aka.ms/vs/17/release/vc_redist.x64.exe`.
 

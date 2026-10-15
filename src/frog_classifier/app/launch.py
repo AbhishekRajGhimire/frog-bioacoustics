@@ -4,6 +4,8 @@ The site staff package's Start Frog Call Scanner.bat runs
 python -I -m frog_classifier.app.launch --app APP --models MODELS --data DATA.
 Streamlit, and every scan it starts, shares this console window, so closing the
 window ends them all, and the app continues an interrupted scan on request.
+A lock in the data folder makes a second start open the running app instead of
+starting another, even while the first is still starting.
 """
 
 from __future__ import annotations
@@ -26,6 +28,10 @@ from .paths import MODELS_VARIABLE, ROOT_VARIABLE
 
 PREFERRED_PORT = 8571
 READY_TIMEOUT_S = 120.0
+LOCK_FILE = "launcher.lock"
+# Windows locks byte ranges, and another process cannot read a locked range, so the
+# lock covers one byte past the port number that a second launcher reads.
+_LOCKED_BYTE = 64
 RUNTIME_ADDRESS = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 # Headless mode skips Streamlit's first-run email question, which would wait for
 # typing in the window; the launcher opens the browser itself once the app answers.
@@ -70,23 +76,29 @@ def _launch(app_file: Path, models: Path, data: Path, preferred_port: int, *, op
     problem = runtime_problem()
     if problem is not None:
         raise LaunchError(problem)
-    port, running = choose_port(preferred_port)
-    url = f"http://localhost:{port}"
-    if running:
-        print(f"The frog call scanner is already running; opening {url}")
-        _show(url, open_browser)
-        return 0
-    print("Starting the frog call scanner...")
-    process = start_app(app_file, port, child_environment(os.environ, data, models))
-    try:
-        wait_until_ready(port, process)
-        print(f"\nThe frog call scanner is running at {url}")
-        print("Keep this window open while you use it. Closing it stops the scanner and any scan.\n")
-        _show(url, open_browser)
-        return process.wait()
-    finally:
-        if process.poll() is None:
-            process.terminate()
+    claim = claim_launch(data)
+    while claim is None:
+        print("The frog call scanner is already open in another window.")
+        running_port = wait_for_other_launch(data)
+        if running_port is not None:
+            _show(f"http://localhost:{running_port}", open_browser)
+            return 0
+        claim = claim_launch(data)
+    with claim:
+        port = choose_port(preferred_port)
+        record_port(claim, port)
+        url = f"http://localhost:{port}"
+        print("Starting the frog call scanner...")
+        process = start_app(app_file, port, child_environment(os.environ, data, models))
+        try:
+            wait_until_ready(port, process)
+            print(f"\nThe frog call scanner is running at {url}")
+            print("Keep this window open while you use it. Closing it stops the scanner and any scan.\n")
+            _show(url, open_browser)
+            return process.wait()
+        finally:
+            if process.poll() is None:
+                process.terminate()
 
 
 def prepare_data_folder(data: Path) -> Path:
@@ -139,13 +151,57 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
-def choose_port(preferred: int) -> tuple[int, bool]:
-    """The port to use, and whether the app already runs there."""
-    if app_answers(preferred):
-        return preferred, True
-    if port_is_free(preferred):
-        return preferred, False
-    return free_port(), False
+def choose_port(preferred: int) -> int:
+    """The preferred port, or a free one when another program holds it.
+
+    An app answering there is not reused: this computer's ports are shared by every
+    Windows user, so it may be someone else's scanner with someone else's results.
+    """
+    return preferred if port_is_free(preferred) else free_port()
+
+
+def claim_launch(data: Path) -> IO[bytes] | None:
+    """Hold the data folder's launcher lock until the returned file is closed, or None
+    when another launcher holds it.
+
+    The operating system frees the lock when its launcher ends, however it ends, so a
+    closed window never leaves it behind.
+    """
+    path = data / LOCK_FILE
+    try:
+        handle = open(os.open(path, os.O_RDWR | os.O_CREAT), "r+b", buffering=0)
+    except OSError as error:
+        raise LaunchError(f"{path} cannot be opened: {error}") from error
+    try:
+        _lock(handle)
+    except OSError:
+        handle.close()
+        return None
+    return handle
+
+
+def record_port(claim: IO[bytes], port: int) -> None:
+    """Tell a second launcher which port this launcher's app answers on."""
+    claim.seek(0)
+    # Fixed width, so a shorter port never leaves digits of a longer one behind.
+    claim.write(f"{port:>5}".encode("ascii"))
+
+
+def wait_for_other_launch(data: Path, *, timeout_s: float = READY_TIMEOUT_S) -> int | None:
+    """The port of the app the launcher holding data started, once it answers, or
+    None when that launcher has ended."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        port = _recorded_port(data)
+        if port is not None and app_answers(port):
+            return port
+        claim = claim_launch(data)
+        if claim is not None:
+            claim.close()
+            return None
+        if time.monotonic() > deadline:
+            raise LaunchError(f"the scanner in the other window did not answer within {timeout_s:.0f} seconds")
+        time.sleep(_POLL_SECONDS)
 
 
 def child_environment(environ: Mapping[str, str], data: Path, models: Path) -> dict[str, str]:
@@ -193,6 +249,26 @@ def wait_until_ready(port: int, process: subprocess.Popen, *, timeout_s: float =
         if time.monotonic() > deadline:
             raise LaunchError(f"the app did not answer within {timeout_s:.0f} seconds")
         time.sleep(_POLL_SECONDS)
+
+
+def _lock(handle: IO[bytes]) -> None:
+    """Lock handle's file, or raise OSError when another launcher holds it."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        handle.seek(_LOCKED_BYTE)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _recorded_port(data: Path) -> int | None:
+    try:
+        return int((data / LOCK_FILE).read_bytes().decode("ascii"))
+    except (OSError, ValueError):
+        return None
 
 
 def _show(url: str, open_browser: bool) -> None:

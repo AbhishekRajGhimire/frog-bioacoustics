@@ -73,7 +73,7 @@ class LaunchPieceTests(unittest.TestCase):
     def test_a_free_preferred_port_is_used(self) -> None:
         port = launch.free_port()
 
-        self.assertEqual(launch.choose_port(port), (port, False))
+        self.assertEqual(launch.choose_port(port), port)
 
     def test_a_port_held_by_another_program_is_replaced(self) -> None:
         with socket.socket() as holder:
@@ -81,15 +81,9 @@ class LaunchPieceTests(unittest.TestCase):
             holder.listen()
             held = holder.getsockname()[1]
 
-            port, running = launch.choose_port(held)
+            port = launch.choose_port(held)
 
         self.assertNotEqual(port, held)
-        self.assertFalse(running)
-
-    def test_an_app_already_answering_is_reused(self) -> None:
-        port = serve_health(self)
-
-        self.assertEqual(launch.choose_port(port), (port, True))
 
     def test_a_configured_internet_proxy_is_not_used_for_the_local_app(self) -> None:
         port = serve_health(self)
@@ -142,14 +136,33 @@ class LaunchMainTests(unittest.TestCase):
 
     def test_a_running_app_is_opened_instead_of_started_again(self) -> None:
         port = serve_health(self)
+        self.data.mkdir()
+        claim = launch.claim_launch(self.data)
+        self.addCleanup(claim.close)
+        launch.record_port(claim, port)
 
         with patch("webbrowser.open", return_value=True) as browser, patch.object(launch, "start_app") as start:
-            code, output = self._main("--port", str(port))
+            code, output = self._main("--port", str(launch.free_port()))
 
         self.assertEqual(code, 0)
-        self.assertIn("already running", output)
+        self.assertIn("already open in another window", output)
         browser.assert_called_once_with(f"http://localhost:{port}")
         start.assert_not_called()
+
+    def test_an_app_answering_for_another_data_folder_is_left_alone(self) -> None:
+        # Another Windows user's scanner answers on the same port, since this computer's ports are shared.
+        port = serve_health(self)
+
+        with patch("webbrowser.open", return_value=True), patch.object(launch, "start_app") as start, \
+                patch.object(launch, "wait_until_ready"):
+            start.return_value.wait.return_value = 0
+            start.return_value.poll.return_value = 0
+            code, _ = self._main("--port", str(port))
+
+        self.assertEqual(code, 0)
+        start.assert_called_once()
+        self.assertNotEqual(start.call_args.args[1], port)
+
 
     def test_a_missing_runtime_stops_before_anything_starts(self) -> None:
         with patch.object(launch, "runtime_problem", return_value="no runtime here"), \
@@ -180,6 +193,119 @@ class LaunchMainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("unzip the whole package again", output.getvalue())
         start.assert_not_called()
+
+
+class LaunchClaimTests(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.data = Path(directory.name)
+
+    def test_one_launcher_at_a_time_holds_a_data_folder(self) -> None:
+        first = launch.claim_launch(self.data)
+        self.addCleanup(first.close)
+
+        self.assertIsNone(launch.claim_launch(self.data))
+        first.close()
+        second = launch.claim_launch(self.data)
+        self.assertIsNotNone(second)
+        second.close()
+
+    def test_the_port_of_the_holding_launcher_is_found_once_its_app_answers(self) -> None:
+        port = serve_health(self)
+        claim = launch.claim_launch(self.data)
+        self.addCleanup(claim.close)
+        launch.record_port(claim, 8571)
+        launch.record_port(claim, port)
+
+        self.assertEqual(launch.wait_for_other_launch(self.data, timeout_s=30), port)
+
+    def test_a_launcher_that_ends_without_its_app_leaves_the_folder_to_the_next(self) -> None:
+        claim = launch.claim_launch(self.data)
+        threading.Timer(0.5, claim.close).start()
+
+        self.assertIsNone(launch.wait_for_other_launch(self.data, timeout_s=30))
+
+    def test_a_launcher_whose_app_never_answers_is_reported(self) -> None:
+        claim = launch.claim_launch(self.data)
+        self.addCleanup(claim.close)
+        launch.record_port(claim, launch.free_port())
+
+        with self.assertRaisesRegex(launch.LaunchError, "other window did not answer within"):
+            launch.wait_for_other_launch(self.data, timeout_s=0.5)
+
+
+class _SlowApp:
+    """A stand-in for Streamlit on a first start: it answers only after a moment, and runs until stopped."""
+
+    def __init__(self, test: unittest.TestCase, port: int, delay_s: float) -> None:
+        self.stopped = threading.Event()
+        self._server: http.server.HTTPServer | None = None
+        threading.Timer(delay_s, self._serve, args=(port,)).start()
+        test.addCleanup(self.terminate)
+        test.addCleanup(self._close)
+
+    def _serve(self, port: int) -> None:
+        try:
+            self._server = http.server.HTTPServer(("127.0.0.1", port), _Health)
+        except OSError:  # A second copy finds the port taken.
+            return
+        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+
+    def _close(self) -> None:
+        if self._server is not None:
+            self._server.shutdown()
+            self._server.server_close()
+
+    @property
+    def returncode(self) -> int | None:
+        return self.poll()
+
+    def poll(self) -> int | None:
+        return 0 if self.stopped.is_set() else None
+
+    def wait(self) -> int:
+        self.stopped.wait(30)
+        return 0
+
+    def terminate(self) -> None:
+        self.stopped.set()
+
+
+class SecondStartTests(unittest.TestCase):
+    def test_a_second_start_while_the_first_is_starting_opens_the_first(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        (root / "models").mkdir()
+        port = launch.free_port()
+        arguments = [
+            "--app", str(APP), "--models", str(root / "models"), "--data", str(root / "data"), "--port", str(port),
+        ]
+        apps: list[_SlowApp] = []
+        first_started = threading.Event()
+
+        def start_app(app_file: Path, app_port: int, environment: object, *, log: object = None) -> _SlowApp:
+            apps.append(_SlowApp(self, app_port, delay_s=5))
+            first_started.set()
+            if len(apps) > 1:
+                apps[-1].terminate()
+            return apps[-1]
+
+        output = io.StringIO()
+        with patch("sys.stdout", output), patch("webbrowser.open", return_value=True) as browser, \
+                patch.object(launch, "start_app", side_effect=start_app):
+            first = threading.Thread(target=launch.main, args=(arguments,))
+            first.start()
+            self.assertTrue(first_started.wait(30))
+            code = launch.main(arguments)
+            apps[0].terminate()
+            first.join(30)
+
+        self.assertEqual(len(apps), 1, output.getvalue())
+        self.assertEqual(code, 0)
+        self.assertIn("already open in another window", output.getvalue())
+        self.assertEqual(browser.call_count, 2)
 
 
 class AppStartTests(unittest.TestCase):
