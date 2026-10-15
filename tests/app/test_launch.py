@@ -139,7 +139,7 @@ class LaunchMainTests(unittest.TestCase):
         self.data.mkdir()
         claim = launch.claim_launch(self.data)
         self.addCleanup(claim.close)
-        launch.record_port(claim, port)
+        launch.record_port(self.data, port)
 
         with patch("webbrowser.open", return_value=True) as browser, patch.object(launch, "start_app") as start:
             code, output = self._main("--port", str(launch.free_port()))
@@ -215,10 +215,19 @@ class LaunchClaimTests(unittest.TestCase):
         port = serve_health(self)
         claim = launch.claim_launch(self.data)
         self.addCleanup(claim.close)
-        launch.record_port(claim, 8571)
-        launch.record_port(claim, port)
+        launch.record_port(self.data, 8571)
+        launch.record_port(self.data, port)
 
         self.assertEqual(launch.wait_for_other_launch(self.data, timeout_s=30), port)
+
+    def test_the_port_can_be_read_by_any_program_while_the_lock_is_held(self) -> None:
+        # Windows refuses a read that overlaps a locked byte, and programs read in large blocks.
+        claim = launch.claim_launch(self.data)
+        self.addCleanup(claim.close)
+        launch.record_port(self.data, 8571)
+
+        with (self.data / launch.PORT_FILE).open("rb") as port_file:
+            self.assertEqual(port_file.read(65536), b"8571")
 
     def test_a_launcher_that_ends_without_its_app_leaves_the_folder_to_the_next(self) -> None:
         claim = launch.claim_launch(self.data)
@@ -229,7 +238,7 @@ class LaunchClaimTests(unittest.TestCase):
     def test_a_launcher_whose_app_never_answers_is_reported(self) -> None:
         claim = launch.claim_launch(self.data)
         self.addCleanup(claim.close)
-        launch.record_port(claim, launch.free_port())
+        launch.record_port(self.data, launch.free_port())
 
         with self.assertRaisesRegex(launch.LaunchError, "other window did not answer within"):
             launch.wait_for_other_launch(self.data, timeout_s=0.5)

@@ -43,7 +43,7 @@ results/detections/<input>-<run>/   detection records: detections.sqlite, detect
 results/detections/<name>-<run>/    app deployments: the same files plus deployment.json, scan_status.json, scan.log
 results/analytics/<record>/  activity analyses: report.md, three figures, hour, date, and window tables
 dist/Frog Call Scanner/      the site staff package, and beside it FrogCallScanner-<version>-<commit>.zip
-%LOCALAPPDATA%\Frog Call Scanner\   the package's data root on a staff computer: results/detections, raw/uploads, and launcher.lock
+%LOCALAPPDATA%\Frog Call Scanner\   the package's data root on a staff computer: results/detections, raw/uploads, launcher.lock, and launcher.port
 src/frog_classifier/data/    manifest, splitting, validation, reporting, and configuration package
 src/frog_classifier/preprocessing/   Mel rendering, per-recording noise floor, PNG encoding, display colours
 src/frog_classifier/labeling/   session queue, decision log, moves, playback audio
@@ -277,7 +277,8 @@ It checks that every import path is inside the package, the app modules import w
 `Start Frog Call Scanner.bat` runs `app\python\python.exe -I -m frog_classifier.app.launch` with the app file, model folder, and `%LOCALAPPDATA%\Frog Call Scanner` as arguments, every package path built from the batch file's own location.
 It says to extract the whole download when the packaged Python is missing, which is what starting it from inside the zip looks like, and pauses only when the launcher reports a problem.
 `frog_classifier.app.launch` creates the data folder, checks that `msvcp140.dll` loads and otherwise names Microsoft's Visual C++ Redistributable, and takes the lock on `launcher.lock` in the data folder.
-When another launcher holds that lock, it waits for that launcher's app to answer at the port written in the file and opens it, so a second double-click during a slow first start never starts a second copy; the operating system frees the lock when its launcher ends, however it ends.
+When another launcher holds that lock, it waits for that launcher's app to answer at the port that launcher wrote to `launcher.port` and opens it, so a second double-click during a slow first start never starts a second copy; the operating system frees the lock when its launcher ends, however it ends.
+The port has a file of its own because Windows refuses any read that overlaps a locked byte.
 The launcher holding the lock uses port 8571, or a free port when anything else holds it, even another scanner, because this computer's ports are shared by every Windows user.
 It starts Streamlit for this computer only, headless, with the minimal toolbar and no file watcher, in an environment without `PYTHON` variables and with `PYTHONNOUSERSITE=1`, `FROG_CLASSIFIER_ROOT` set to the data folder, and `FROG_CLASSIFIER_MODELS` set to the packaged model folder.
 It opens the browser once the app's health address answers, without any proxy, and waits; Streamlit and every scan share the launcher's console window, so closing it ends them all, and the app later shows the scan as interrupted and continues it on request.

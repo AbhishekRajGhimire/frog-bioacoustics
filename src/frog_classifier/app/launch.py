@@ -29,9 +29,8 @@ from .paths import MODELS_VARIABLE, ROOT_VARIABLE
 PREFERRED_PORT = 8571
 READY_TIMEOUT_S = 120.0
 LOCK_FILE = "launcher.lock"
-# Windows locks byte ranges, and another process cannot read a locked range, so the
-# lock covers one byte past the port number that a second launcher reads.
-_LOCKED_BYTE = 64
+# The port has its own file: Windows refuses any read that overlaps a locked byte.
+PORT_FILE = "launcher.port"
 RUNTIME_ADDRESS = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 # Headless mode skips Streamlit's first-run email question, which would wait for
 # typing in the window; the launcher opens the browser itself once the app answers.
@@ -86,7 +85,7 @@ def _launch(app_file: Path, models: Path, data: Path, preferred_port: int, *, op
         claim = claim_launch(data)
     with claim:
         port = choose_port(preferred_port)
-        record_port(claim, port)
+        record_port(data, port)
         url = f"http://localhost:{port}"
         print("Starting the frog call scanner...")
         process = start_app(app_file, port, child_environment(os.environ, data, models))
@@ -180,11 +179,12 @@ def claim_launch(data: Path) -> IO[bytes] | None:
     return handle
 
 
-def record_port(claim: IO[bytes], port: int) -> None:
-    """Tell a second launcher which port this launcher's app answers on."""
-    claim.seek(0)
-    # Fixed width, so a shorter port never leaves digits of a longer one behind.
-    claim.write(f"{port:>5}".encode("ascii"))
+def record_port(data: Path, port: int) -> None:
+    """Tell a second launcher which port the app of the launcher holding data answers on."""
+    try:
+        (data / PORT_FILE).write_bytes(str(port).encode("ascii"))
+    except OSError as error:
+        raise LaunchError(f"{data / PORT_FILE} cannot be written: {error}") from error
 
 
 def wait_for_other_launch(data: Path, *, timeout_s: float = READY_TIMEOUT_S) -> int | None:
@@ -256,7 +256,6 @@ def _lock(handle: IO[bytes]) -> None:
     if sys.platform == "win32":
         import msvcrt
 
-        handle.seek(_LOCKED_BYTE)
         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
     else:
         import fcntl
@@ -266,7 +265,7 @@ def _lock(handle: IO[bytes]) -> None:
 
 def _recorded_port(data: Path) -> int | None:
     try:
-        return int((data / LOCK_FILE).read_bytes().decode("ascii"))
+        return int((data / PORT_FILE).read_bytes().decode("ascii"))
     except (OSError, ValueError):
         return None
 
