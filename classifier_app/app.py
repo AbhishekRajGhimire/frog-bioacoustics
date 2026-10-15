@@ -139,7 +139,7 @@ def _folder_choice() -> bool:
     browse_column.button("Browse...", key="browse", on_click=_browse)
     text = _folder_text()
     if not text:
-        st.info("Paste the folder's location, or press Browse to pick it. A memory card usually appears as a drive such as E:\\.")
+        st.info("Paste the folder's location, or press Browse to pick it. A memory card usually appears as a drive such as `E:\\`.")
         return False
     try:
         preview = preview_recordings(Path(text))
@@ -369,14 +369,17 @@ def _results(paths: AppPaths, deployment: Deployment) -> None:
     for tab, figure in zip(st.tabs(FIGURE_TITLES), figures):
         tab.image(figure)
     st.markdown("#### How much the threshold matters")
-    st.table([
-        {
-            "Threshold": f"{row.threshold:.3f}",
-            "Windows with calls": f"{row.detected_windows:,}",
-            "Calls in recorded time": "not recorded" if row.calling_share is None else f"{row.calling_share:.1%}",
-        }
-        for row in activity.thresholds
-    ])
+    st.dataframe(
+        [
+            {
+                "Threshold": f"{row.threshold:.3f}",
+                "Windows with calls": f"{row.detected_windows:,}",
+                "Calls in recorded time": "not recorded" if row.calling_share is None else f"{row.calling_share:.1%}",
+            }
+            for row in activity.thresholds
+        ],
+        hide_index=True,
+    )
     _look_closer(paths, deployment, activity)
     st.download_button(
         "Download results (zip)",
@@ -421,7 +424,7 @@ def _look_closer(paths: AppPaths, deployment: Deployment, activity: Activity) ->
                 "Date": f"{window.start:%Y-%m-%d}",
                 "Time": f"{window.start:%H:%M:%S}",
                 "Call": "yes" if activity.is_detected(window) else "",
-                "Probability": round(window.probability, 3),
+                "Probability": f"{window.probability:.3f}",
                 "Recording": window.recording_path,
                 "Seconds in": window.window_start_s,
             }

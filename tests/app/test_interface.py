@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import time
@@ -78,6 +79,11 @@ class InterfaceTests(unittest.TestCase):
 
         self.assertEqual(app.text_input(key="folder").value, str(self.card))
 
+    def test_the_drive_hint_keeps_its_backslash(self) -> None:
+        app = self._app()
+
+        self.assertIn("`E:\\`", self._texts(app.info))
+
     def test_the_upload_box_is_offered(self) -> None:
         app = self._app()
 
@@ -125,6 +131,16 @@ class InterfaceTests(unittest.TestCase):
         self.assertGreaterEqual(len(app.get("imgs")), 3)
         self.assertEqual(len(app.get("download_button")), 1)
 
+    def test_the_threshold_table_has_no_row_numbers(self) -> None:
+        self._record()
+
+        app = self._app("Results")
+
+        self.assertEqual(len(app.table), 0)
+        thresholds = app.dataframe[0]
+        self.assertTrue(json.loads(thresholds.proto.columns)["_index"]["hidden"])
+        self.assertEqual(list(thresholds.value["Threshold"])[:2], ["0.500", "0.700"])
+
     def test_a_new_threshold_changes_the_results(self) -> None:
         self._record()
         app = self._app("Results")
@@ -139,7 +155,8 @@ class InterfaceTests(unittest.TestCase):
         app = self._app("Results")
 
         self.assertEqual(app.selectbox(key=f"hour:{self.folder}").value, 1)
-        self.assertEqual(len(app.dataframe[0].value), 2)
+        windows = app.dataframe[-1].value
+        self.assertEqual(list(windows["Probability"]), ["0.900", "0.200"])
         self.assertEqual(len(app.get("audio")), 1)
 
     def test_a_deployment_still_scanning_shows_progress_instead_of_results(self) -> None:
