@@ -7,9 +7,13 @@ stay free of PyTorch.
 from __future__ import annotations
 
 import hashlib
+import multiprocessing
+import os
 import signal
+import threading
 import time
 from dataclasses import dataclass
+from multiprocessing.process import BaseProcess
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
@@ -49,9 +53,22 @@ class RenderedRecording:
 
 
 def start_render_worker() -> None:
-    """Leave Ctrl+C to the main process, which cancels the remaining work and
-    stops the workers itself."""
+    """Prepare a rendering worker process.
+
+    Ctrl+C is left to the main process, which cancels the remaining work and
+    stops the workers itself. If the main process dies without stopping them,
+    for example when it is killed, the worker exits too: workers hold their own
+    ends of the job queue, so they would otherwise wait for work forever.
+    """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    parent = multiprocessing.parent_process()
+    if parent is not None:
+        threading.Thread(target=_exit_with, args=(parent,), daemon=True).start()
+
+
+def _exit_with(parent: BaseProcess) -> None:
+    parent.join()
+    os._exit(1)
 
 
 def render_for_detection(job: RenderJob) -> RenderedRecording:

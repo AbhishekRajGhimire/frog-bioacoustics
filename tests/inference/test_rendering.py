@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import warnings
 from datetime import datetime
@@ -97,6 +100,65 @@ class RenderForDetectionTests(unittest.TestCase):
         )
 
         self.assertEqual(result.stdout.strip(), "False")
+
+
+# A main process that starts one rendering worker, reports the worker's process
+# id, and then waits to be killed.
+MAIN_PROCESS = """
+import multiprocessing, os, time
+from concurrent.futures import ProcessPoolExecutor
+from frog_classifier.inference.rendering import start_render_worker
+
+if __name__ == "__main__":
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=1, mp_context=context, initializer=start_render_worker) as executor:
+        print(executor.submit(os.getpid).result(), flush=True)
+        time.sleep(600)
+"""
+
+
+def _process_is_alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT: still running
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+class RenderWorkerTests(unittest.TestCase):
+    def test_a_worker_exits_when_its_main_process_is_killed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "main_process.py"
+            script.write_bytes(MAIN_PROCESS.encode("utf-8"))
+            main = subprocess.Popen([sys.executable, str(script)], stdout=subprocess.PIPE, text=True)
+            try:
+                worker = int(main.stdout.readline())
+                self.assertTrue(_process_is_alive(worker))
+
+                main.kill()
+                main.wait()
+                deadline = time.monotonic() + 15
+                while _process_is_alive(worker) and time.monotonic() < deadline:
+                    time.sleep(0.2)
+
+                orphaned = _process_is_alive(worker)
+                if orphaned:
+                    os.kill(worker, signal.SIGTERM)
+                self.assertFalse(orphaned, "the worker outlived its main process")
+            finally:
+                main.kill()
+                main.stdout.close()
 
 
 if __name__ == "__main__":
